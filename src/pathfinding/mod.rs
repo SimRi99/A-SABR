@@ -8,6 +8,7 @@ use crate::types::{Date, NodeID};
 use crate::{bundle::Bundle, route_stage::RouteStage};
 use std::cell::RefCell;
 use std::rc::Rc;
+use crate::heuristic::Heuristic;
 
 #[cfg(feature = "contact_work_area")]
 pub mod contact_parenting;
@@ -121,6 +122,7 @@ pub trait Pathfinding<NM: NodeManager, CM: ContactManager> {
         source: NodeID,
         bundle: &Bundle,
         excluded_nodes_sorted: &[NodeID],
+        heuristic: &Option<Rc<RefCell<&mut dyn Heuristic<NM, CM>>>>
     ) -> PathFindingOutput<NM, CM>;
 
     /// Get a shared pointer to the multigraph.
@@ -146,13 +148,14 @@ pub trait Pathfinding<NM: NodeManager, CM: ContactManager> {
 /// # Returns
 ///
 /// An `Option` containing a `RouteStage` if a suitable hop is found, or `None` if no valid hop is available.
-fn try_make_hop<NM: NodeManager, CM: ContactManager>(
+pub fn try_make_hop<NM: NodeManager, CM: ContactManager>(
     first_contact_index: usize,
     sndr_route: &Rc<RefCell<RouteStage<NM, CM>>>,
-    _bundle: &Bundle,
+    bundle: &Bundle,
     contacts: &[Rc<RefCell<Contact<NM, CM>>>],
     tx_node: &Rc<RefCell<Node<NM>>>,
     rx_node: &Rc<RefCell<Node<NM>>>,
+    heuristic: &Option<Rc<RefCell<&mut dyn Heuristic<NM, CM>>>>
 ) -> Option<RouteStage<NM, CM>> {
     let mut index = 0;
     let mut final_data = ContactManagerTxData {
@@ -167,7 +170,7 @@ fn try_make_hop<NM: NodeManager, CM: ContactManager>(
     #[cfg(feature = "node_proc")]
     let mut bundle_to_consider = sndr_route.borrow().bundle.clone();
     #[cfg(not(feature = "node_proc"))]
-    let bundle_to_consider = _bundle;
+    let bundle_to_consider = bundle;
 
     let sndr_route_borrowed = sndr_route.borrow();
 
@@ -211,7 +214,7 @@ fn try_make_hop<NM: NodeManager, CM: ContactManager>(
                 if !rx_node.borrow().manager.dry_run_rx(
                     hop.tx_start + hop.delay,
                     hop.tx_end + hop.delay,
-                    _bundle,
+                    bundle,
                 ) {
                     continue;
                 }
@@ -236,6 +239,11 @@ fn try_make_hop<NM: NodeManager, CM: ContactManager>(
             #[cfg(feature = "node_proc")]
             bundle_to_consider,
         );
+
+        if let Some(heuristic_value) = heuristic {
+            route_proposition.at_time_heuristic = heuristic_value.borrow_mut().compute_at_time_heuristic(&route_proposition, bundle);
+            route_proposition.hop_count_heuristic = heuristic_value.borrow_mut().compute_hop_count_heuristic(&route_proposition, bundle);
+        }
 
         route_proposition.hop_count = sndr_route_borrowed.hop_count + 1;
         route_proposition.cumulative_delay =

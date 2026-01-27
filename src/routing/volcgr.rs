@@ -96,7 +96,7 @@ impl<S: RouteStorage<NM, CM>, NM: NodeManager, CM: ContactManager, P: Pathfindin
 
         let new_tree = self
             .pathfinding
-            .get_next(curr_time, source, bundle, excluded_nodes);
+            .get_next(curr_time, source, bundle, excluded_nodes, &None);
         let tree = Rc::new(RefCell::new(new_tree));
 
         if let Some(route) = Route::from_tree(tree, dest) {

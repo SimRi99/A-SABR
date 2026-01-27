@@ -64,6 +64,29 @@ impl<NM: NodeManager, CM: ContactManager> Receiver<NM, CM> {
         None
     }
 
+    /// The function works the same `lazy_prune_and_get_first_idx`, however, it does not increase
+    /// the index. This function is used for some heuristic functions that might need to explore
+    /// receivers at different times.
+    ///
+    /// This method iterates over `contacts_to_receiver`, starting from the index stored in `self.next`.
+    /// It checks if each contact is still valid based on its expiration time. Once a valid contact
+    /// is found, it updates `self.next` and returns the index of this contact.
+    ///
+    /// # Parameters
+    /// - `current_time`: The current time against which contact expiration is checked.
+    ///
+    /// # Returns
+    /// - `Some(usize)`: The index of the first valid contact if found.
+    /// - `None`: If no valid contact is found.
+    pub fn get_first_idx(&self, current_time: Date) -> Option<usize> {
+        for (idx, contact) in self.contacts_to_receiver.iter().enumerate().skip(self.next) {
+            if contact.borrow().info.end > current_time {
+                return Some(idx);
+            }
+        }
+        None
+    }
+
     /// Checks if the receiver's node is excluded from routing or pathfinding.
     ///
     /// This method provides a quick check on whether the receiver node is excluded
@@ -85,6 +108,9 @@ pub struct Multigraph<NM: NodeManager, CM: ContactManager> {
     pub senders: Vec<Sender<NM, CM>>,
     /// * `nodes` - The list of node objects.
     pub nodes: Vec<Rc<RefCell<Node<NM>>>>,
+    /// * `min_delay_between_nodes` - A matrix storing for each node pair the minimal delay to each
+    /// other as if they were connected. This information is used for A*-heuristics
+    pub min_delay_between_nodes: Vec<Vec<Duration>>,
     /// * `node_count` - The total number of nodes in the multigraph.
     node_count: usize,
 }
@@ -165,6 +191,7 @@ impl<NM: NodeManager, CM: ContactManager> Multigraph<NM, CM> {
         Self {
             senders,
             nodes: all_refs,
+            min_delay_between_nodes: vec![],
             node_count,
         }
     }
@@ -197,5 +224,14 @@ impl<NM: NodeManager, CM: ContactManager> Multigraph<NM, CM> {
     /// * `usize` - The total number of nodes.
     pub fn get_node_count(&self) -> usize {
         self.node_count
+    }
+
+    /// Retrieves the minimal delay between the sender and the target node
+    ///
+    /// # Returns
+    ///
+    /// * `Duration` - The minimal delay between two nodes
+    pub fn get_minimal_delay_between_sender_and_target(&self, sender: NodeID, target: NodeID) -> Duration {
+        self.min_delay_between_nodes[sender as usize][target as usize]
     }
 }

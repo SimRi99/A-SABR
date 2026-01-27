@@ -20,6 +20,9 @@ pub mod pathfinding;
 /// Module containing the RouteStage definition.
 /// A RouteStage is an abstraction of Dijkstra's algorithm progress, a route hop, or work areas.
 pub mod route_stage;
+/// Model containing the Heuristic definition
+/// A Heuristic tries to predict the future costs of a route stage by simplifying the routing problem
+pub mod heuristic;
 
 ///  Module containing the storage capabilities for the routes.
 pub mod route_storage;

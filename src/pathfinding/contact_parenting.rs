@@ -12,6 +12,7 @@ use crate::{
     contact_manager::ContactManager,
     distance::{Distance, DistanceWrapper},
     multigraph::Multigraph,
+    heuristic::Heuristic,
     node_manager::NodeManager,
     route_stage::RouteStage,
     types::{Date, NodeID},
@@ -29,7 +30,12 @@ macro_rules! define_contact_graph {
         ///
         /// * `NM` - A type that implements the `NodeManager` trait.
         /// * `CM` - A type that implements the `ContactManager` trait.
-        pub struct $name<NM: NodeManager, CM: ContactManager, D: Distance<NM, CM>> {
+        /// * `RD` - A type that implements a `Distance` between route stages based on the real
+        /// distances so far, and used to decide when to insert a new element into the priority
+        /// queue
+        /// * `HD` - A type that implements a `Distance` between route stages based on heuristics
+        /// to decide which node to extract next from the priority queue
+        pub struct $name<NM: NodeManager, CM: ContactManager, RD: Distance<NM, CM>, HD: Distance<NM, CM>> {
             /// The node multigraph for contact access.
             graph: Rc<RefCell<Multigraph<NM, CM>>>,
             /// For tree construction, tracks the nodes visited as transmitters.
@@ -42,11 +48,12 @@ macro_rules! define_contact_graph {
             visited_as_rx_count: usize,
 
             #[doc(hidden)]
-            _phantom_distance: PhantomData<D>,
+            _phantom_distance_rd: PhantomData<RD>,
+            _phantom_distance_hd: PhantomData<RD>,
         }
 
-        impl<NM: NodeManager, CM: ContactManager, D: Distance<NM, CM>> Pathfinding<NM, CM>
-            for $name<NM, CM, D>
+        impl<NM: NodeManager, CM: ContactManager, RD: Distance<NM, CM>, HD: Distance<NM, CM>> Pathfinding<NM, CM>
+            for $name<NM, CM, RD, HD>
         {
             /// Constructs a new `ContactParenting` instance with the provided nodes and contacts.
             ///
@@ -69,7 +76,8 @@ macro_rules! define_contact_graph {
                     visited_as_rx_ids: vec![false; node_count],
                     visited_as_tx_count: 1,
                     visited_as_rx_count: 1,
-                    _phantom_distance: PhantomData,
+                    _phantom_distance_rd: PhantomData,
+                    _phantom_distance_hd: PhantomData,
                 }
             }
 
@@ -94,6 +102,7 @@ macro_rules! define_contact_graph {
                 source: NodeID,
                 bundle: &Bundle,
                 excluded_nodes_sorted: &[NodeID],
+                heuristic: &Option<Rc<RefCell<&mut dyn Heuristic<NM, CM>>>>
             ) -> PathFindingOutput<NM, CM> {
                 let mut graph = self.graph.borrow_mut();
                 if $with_exclusions {
@@ -114,7 +123,7 @@ macro_rules! define_contact_graph {
                     &excluded_nodes_sorted,
                     graph.senders.len(),
                 );
-                let mut priority_queue: BinaryHeap<Reverse<DistanceWrapper<NM, CM, D>>> =
+                let mut priority_queue: BinaryHeap<Reverse<DistanceWrapper<NM, CM, HD>>> =
                     BinaryHeap::new();
                 let mut altered_contacts: Vec<Rc<RefCell<Contact<NM, CM>>>> = Vec::new();
 
@@ -159,7 +168,7 @@ macro_rules! define_contact_graph {
                         }
 
                         if let Some(first_contact_index) =
-                            receiver.lazy_prune_and_get_first_idx(current_time)
+                            receiver.lazy_prune_and_get_first_idx(from_route.borrow().at_time)
                         {
                             if let Some(route_proposition) = try_make_hop(
                                 first_contact_index,
@@ -168,13 +177,14 @@ macro_rules! define_contact_graph {
                                 &receiver.contacts_to_receiver,
                                 &sender.node,
                                 &receiver.node,
+                                heuristic
                             ) {
                                 let mut push = false;
                                 if let Some(hop) = &route_proposition.via {
                                     // todo : improve CF..
                                     if let Some(know_route_ref) = &hop.contact.borrow().work_area {
                                         let mut know_route = know_route_ref.borrow_mut();
-                                        if D::cmp(&route_proposition, &know_route) == Ordering::Less
+                                        if RD::cmp(&route_proposition, &know_route) == Ordering::Less
                                         {
                                             // if "Test"
                                             know_route.is_disabled = true;
@@ -204,7 +214,7 @@ macro_rules! define_contact_graph {
                                             tree.by_destination[rx_node_id as usize].clone()
                                         {
                                             let known_best_route = know_route_ref.borrow_mut();
-                                            if D::cmp(&route_proposition, &known_best_route)
+                                            if RD::cmp(&route_proposition, &known_best_route)
                                                 == Ordering::Less
                                             {
                                                 tree.by_destination[rx_node_id as usize] =

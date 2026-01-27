@@ -171,7 +171,7 @@ macro_rules! create_new_alternative_path_variant {
 
                 let tree = self
                     .pathfinding
-                    .get_next(current_time, source, bundle, excluded_nodes_sorted);
+                    .get_next(current_time, source, bundle, excluded_nodes_sorted, &None);
 
                 if let Some(route) = tree.by_destination[bundle.destinations[0] as usize].clone() {
                     if let Some(contact) = crate::pathfinding::limiting_contact::get_next_to_suppress(route, $better_fn) {

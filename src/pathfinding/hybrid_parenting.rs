@@ -11,6 +11,7 @@ use crate::{
     contact_manager::ContactManager,
     distance::{Distance, DistanceWrapper},
     multigraph::Multigraph,
+    heuristic::Heuristic,
     node_manager::NodeManager,
     route_stage::RouteStage,
     types::{Date, NodeID},
@@ -151,7 +152,7 @@ use super::{try_make_hop, PathFindingOutput, Pathfinding};
 fn try_insert<
     NM: NodeManager,
     CM: ContactManager,
-    D: Distance<NM, CM> + HybridParentingOrd<NM, CM>,
+    RD: Distance<NM, CM> + HybridParentingOrd<NM, CM>,
 >(
     proposition: RouteStage<NM, CM>,
     tree: &mut HybridParentingWorkArea<NM, CM>,
@@ -169,7 +170,7 @@ fn try_insert<
 
     for (idx, route) in routes_for_rx_node.iter().enumerate() {
         let route_borrowed = route.borrow();
-        match D::cmp(&proposition, &route_borrowed) {
+        match RD::cmp(&proposition, &route_borrowed) {
             Ordering::Less => {
                 // If we reached a positive can_retain call on the previous element
                 insert_index = idx;
@@ -181,7 +182,7 @@ fn try_insert<
                 break;
             }
             Ordering::Greater => {
-                if D::can_retain(&proposition, &route_borrowed) {
+                if RD::can_retain(&proposition, &route_borrowed) {
                     insert = true;
                     continue;
                 } else {
@@ -196,7 +197,7 @@ fn try_insert<
         // detect the first prune event but do nothing
         while truncate_index < routes_for_rx_node.len() {
             let route = &routes_for_rx_node[truncate_index].borrow();
-            if D::must_prune(&proposition, route) {
+            if RD::must_prune(&proposition, route) {
                 break;
             }
             truncate_index += 1
@@ -230,23 +231,30 @@ macro_rules! define_mpt {
         ///
         /// * `NM` - A type that implements the `NodeManager` trait.
         /// * `CM` - A type that implements the `ContactManager` trait.
-        /// * `D` - A type that implements the `Distance<NM, CM>` trait.
+        /// * `RD` - A type that implements a `Distance` between route stages based on the real
+        /// distances so far, and used to decide when to insert a new element into the priority
+        /// queue
+        /// * `HD` - A type that implements a `Distance` between route stages based on heuristics
+        /// to decide which node to extract next from the priority queue
         pub struct $name<
             NM: NodeManager,
             CM: ContactManager,
-            D: Distance<NM, CM> + HybridParentingOrd<NM, CM>,
+            RD: Distance<NM, CM> + HybridParentingOrd<NM, CM>,
+            HD: Distance<NM, CM> + HybridParentingOrd<NM, CM>,
         > {
             /// The node multigraph for contact access.
             graph: Rc<RefCell<Multigraph<NM, CM>>>,
             #[doc(hidden)]
-            _phantom_distance: PhantomData<D>,
+            _phantom_distance_rd: PhantomData<RD>,
+            _phantom_distance_hd: PhantomData<HD>,
         }
 
         impl<
                 NM: NodeManager,
                 CM: ContactManager,
-                D: Distance<NM, CM> + HybridParentingOrd<NM, CM>,
-            > Pathfinding<NM, CM> for $name<NM, CM, D>
+                RD: Distance<NM, CM> + HybridParentingOrd<NM, CM>,
+                HD: Distance<NM, CM> + HybridParentingOrd<NM, CM>,
+            > Pathfinding<NM, CM> for $name<NM, CM, RD, HD>
         {
             /// Constructs a new `HybridParenting` instance with the provided nodes and contacts.
             ///
@@ -260,7 +268,8 @@ macro_rules! define_mpt {
             fn new(multigraph: Rc<RefCell<Multigraph<NM, CM>>>) -> Self {
                 Self {
                     graph: multigraph,
-                    _phantom_distance: PhantomData,
+                    _phantom_distance_rd: PhantomData,
+                    _phantom_distance_hd: PhantomData,
                 }
             }
 
@@ -285,6 +294,7 @@ macro_rules! define_mpt {
                 source: NodeID,
                 bundle: &Bundle,
                 excluded_nodes_sorted: &[NodeID],
+                heuristic: &Option<Rc<RefCell<&mut dyn Heuristic<NM, CM>>>>
             ) -> PathFindingOutput<NM, CM> {
                 let mut graph = self.graph.borrow_mut();
                 if $with_exclusions {
@@ -304,7 +314,7 @@ macro_rules! define_mpt {
                     excluded_nodes_sorted,
                     graph.get_node_count(),
                 );
-                let mut priority_queue: BinaryHeap<Reverse<DistanceWrapper<NM, CM, D>>> =
+                let mut priority_queue: BinaryHeap<Reverse<DistanceWrapper<NM, CM, HD>>> =
                     BinaryHeap::new();
 
                 tree.by_destination[source as usize].push(source_route.clone());
@@ -333,7 +343,7 @@ macro_rules! define_mpt {
                         }
 
                         if let Some(first_contact_index) =
-                            receiver.lazy_prune_and_get_first_idx(current_time)
+                            receiver.lazy_prune_and_get_first_idx(from_route.borrow().at_time)
                         {
                             if let Some(route_proposition) = try_make_hop(
                                 first_contact_index,
@@ -342,10 +352,11 @@ macro_rules! define_mpt {
                                 &receiver.contacts_to_receiver,
                                 &sender.node,
                                 &receiver.node,
+                                heuristic
                             ) {
                                 // This transforms a prop in the stack to a prop in the heap
                                 if let Some(new_route) =
-                                    try_insert::<NM, CM, D>(route_proposition, &mut tree)
+                                    try_insert::<NM, CM, RD>(route_proposition, &mut tree)
                                 {
                                     priority_queue
                                         .push(Reverse(DistanceWrapper::new(new_route.clone())));

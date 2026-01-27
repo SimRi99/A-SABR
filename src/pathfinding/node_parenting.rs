@@ -8,6 +8,7 @@ use crate::{
     contact_manager::ContactManager,
     distance::{Distance, DistanceWrapper},
     multigraph::Multigraph,
+    heuristic::Heuristic,
     node_manager::NodeManager,
     route_stage::RouteStage,
     types::{Date, NodeID},
@@ -25,16 +26,21 @@ macro_rules! define_node_graph {
         ///
         /// * `NM` - A type that implements the `NodeManager` trait.
         /// * `CM` - A type that implements the `ContactManager` trait.
-        /// * `D` - A type that implements the `Distance<NM, CM>` trait.
-        pub struct $name<NM: NodeManager, CM: ContactManager, D: Distance<NM, CM>> {
+        /// * `RD` - A type that implements a `Distance` between route stages based on the real
+        /// distances so far, and used to decide when to insert a new element into the priority
+        /// queue
+        /// * `HD` - A type that implements a `Distance` between route stages based on heuristics
+        /// to decide which node to extract next from the priority queue
+        pub struct $name<NM: NodeManager, CM: ContactManager, RD: Distance<NM, CM>, HD: Distance<NM, CM>> {
             /// The node multigraph for contact access.
             graph: Rc<RefCell<Multigraph<NM, CM>>>,
             #[doc(hidden)]
-            _phantom_distance: PhantomData<D>,
+            _phantom_distance_rd: PhantomData<RD>,
+            _phantom_distance_hd: PhantomData<HD>,
         }
 
-        impl<NM: NodeManager, CM: ContactManager, D: Distance<NM, CM>> Pathfinding<NM, CM>
-            for $name<NM, CM, D>
+        impl<NM: NodeManager, CM: ContactManager, RD: Distance<NM, CM>, HD: Distance<NM, CM>> Pathfinding<NM, CM>
+            for $name<NM, CM, RD, HD>
         {
             /// Constructs a new `NodeParenting` instance with the provided nodes and contacts.
             ///
@@ -48,7 +54,8 @@ macro_rules! define_node_graph {
             fn new(multigraph: Rc<RefCell<Multigraph<NM, CM>>>) -> Self {
                 Self {
                     graph: multigraph,
-                    _phantom_distance: PhantomData,
+                    _phantom_distance_rd: PhantomData,
+                    _phantom_distance_hd: PhantomData,
                 }
             }
 
@@ -73,6 +80,7 @@ macro_rules! define_node_graph {
                 source: NodeID,
                 bundle: &Bundle,
                 excluded_nodes_sorted: &[NodeID],
+                heuristic: &Option<Rc<RefCell<&mut dyn Heuristic<NM, CM>>>>
             ) -> PathFindingOutput<NM, CM> {
                 let mut graph = self.graph.borrow_mut();
 
@@ -94,7 +102,7 @@ macro_rules! define_node_graph {
                     graph.senders.len(),
                 );
 
-                let mut priority_queue: BinaryHeap<Reverse<DistanceWrapper<NM, CM, D>>> =
+                let mut priority_queue: BinaryHeap<Reverse<DistanceWrapper<NM, CM, HD>>> =
                     BinaryHeap::new();
 
                 for node_id in 0..graph.get_node_count() {
@@ -127,7 +135,7 @@ macro_rules! define_node_graph {
                         }
 
                         if let Some(first_contact_index) =
-                            receiver.lazy_prune_and_get_first_idx(current_time)
+                            receiver.lazy_prune_and_get_first_idx(from_route.borrow().at_time)
                         {
                             if let Some(route_proposition) = try_make_hop(
                                 first_contact_index,
@@ -136,6 +144,7 @@ macro_rules! define_node_graph {
                                 &receiver.contacts_to_receiver,
                                 &sender.node,
                                 &receiver.node,
+                                heuristic
                             ) {
                                 let mut push = false;
                                 if let Some(know_route_ref) = tree.by_destination
@@ -143,7 +152,7 @@ macro_rules! define_node_graph {
                                     .clone()
                                 {
                                     let mut known_route = know_route_ref.borrow_mut();
-                                    if D::cmp(&route_proposition, &known_route) == Ordering::Less {
+                                    if RD::cmp(&route_proposition, &known_route) == Ordering::Less {
                                         known_route.is_disabled = true;
                                         push = true;
                                     }

@@ -61,6 +61,10 @@ pub struct RouteStage<NM: NodeManager, CM: ContactManager> {
     #[cfg_attr(feature = "debug", derivative(Debug = "ignore"))]
     // avoid cyclic print with debug formatting
     pub next_for_destination: HashMap<NodeID, Rc<RefCell<RouteStage<NM, CM>>>>,
+    // The heuristic when the bundle will be fully received at its target
+    pub at_time_heuristic: Date,
+    // The heuristic how many hops it will take to reach the target of the bundle
+    pub hop_count_heuristic: HopCount,
 
     #[cfg(feature = "node_proc")]
     /// The stage of the bundle that arrives at to_node
@@ -95,6 +99,8 @@ impl<NM: NodeManager, CM: ContactManager> RouteStage<NM, CM> {
             expiration: Date::MAX,
             route_initialized: false,
             next_for_destination: HashMap::new(),
+            at_time_heuristic: Date::MIN,
+            hop_count_heuristic: 0,
             #[cfg(feature = "node_proc")]
             bundle: bundle,
         }
@@ -113,6 +119,8 @@ impl<NM: NodeManager, CM: ContactManager> RouteStage<NM, CM> {
         route.hop_count = self.hop_count;
         route.cumulative_delay = self.cumulative_delay;
         route.expiration = self.expiration;
+        route.at_time_heuristic = self.at_time_heuristic;
+        route.hop_count_heuristic = self.hop_count_heuristic;
 
         route
     }

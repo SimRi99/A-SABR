@@ -32,50 +32,50 @@ use crate::pathfinding::node_parenting::NodeParentingPath;
 use super::{spsn::Spsn, Router};
 
 pub type SpsnHybridParenting<NM, CM> =
-    Spsn<NM, CM, HybridParentingTreeExcl<NM, CM, SABR>, TreeCache<NM, CM>>;
+    Spsn<NM, CM, HybridParentingTreeExcl<NM, CM, SABR, SABR>, TreeCache<NM, CM>>;
 
 pub type SpsnNodeParenting<NM, CM> =
-    Spsn<NM, CM, NodeParentingTreeExcl<NM, CM, SABR>, TreeCache<NM, CM>>;
+    Spsn<NM, CM, NodeParentingTreeExcl<NM, CM, SABR, SABR>, TreeCache<NM, CM>>;
 
 #[cfg(feature = "contact_work_area")]
 pub type SpsnContactParenting<NM, CM> =
-    Spsn<NM, CM, ContactParentingTreeExcl<NM, CM, SABR>, TreeCache<NM, CM>>;
+    Spsn<NM, CM, ContactParentingTreeExcl<NM, CM, SABR, SABR>, TreeCache<NM, CM>>;
 
 pub type VolCgrHybridParenting<NM, CM> =
-    VolCgr<NM, CM, HybridParentingPathExcl<NM, CM, SABR>, RoutingTable<NM, CM, SABR>>;
+    VolCgr<NM, CM, HybridParentingPathExcl<NM, CM, SABR, SABR>, RoutingTable<NM, CM, SABR>>;
 
 pub type VolCgrNodeParenting<NM, CM> =
-    VolCgr<NM, CM, NodeParentingPathExcl<NM, CM, SABR>, RoutingTable<NM, CM, SABR>>;
+    VolCgr<NM, CM, NodeParentingPathExcl<NM, CM, SABR, SABR>, RoutingTable<NM, CM, SABR>>;
 
 #[cfg(feature = "contact_work_area")]
 pub type VolCgrContactParenting<NM, CM> =
-    VolCgr<NM, CM, ContactParentingPathExcl<NM, CM, SABR>, RoutingTable<NM, CM, SABR>>;
+    VolCgr<NM, CM, ContactParentingPathExcl<NM, CM, SABR, SABR>, RoutingTable<NM, CM, SABR>>;
 
 #[cfg(feature = "contact_suppression")]
 pub type CgrFirstEndingHybridParenting<NM, CM> =
-    Cgr<NM, CM, FirstEnding<NM, CM, HybridParentingPath<NM, CM, SABR>>, RoutingTable<NM, CM, SABR>>;
+    Cgr<NM, CM, FirstEnding<NM, CM, HybridParentingPath<NM, CM, SABR, SABR>>, RoutingTable<NM, CM, SABR>>;
 
 #[cfg(feature = "first_depleted")]
 pub type CgrFirstDepletedHybridParenting<NM, CM> = Cgr<
     NM,
     CM,
-    FirstDepleted<NM, CM, HybridParentingPath<NM, CM, SABR>>,
+    FirstDepleted<NM, CM, HybridParentingPath<NM, CM, SABR, SABR>>,
     RoutingTable<NM, CM, SABR>,
 >;
 
 #[cfg(feature = "contact_suppression")]
 pub type CgrFirstEndingNodeParenting<NM, CM> =
-    Cgr<NM, CM, FirstEnding<NM, CM, NodeParentingPath<NM, CM, SABR>>, RoutingTable<NM, CM, SABR>>;
+    Cgr<NM, CM, FirstEnding<NM, CM, NodeParentingPath<NM, CM, SABR, SABR>>, RoutingTable<NM, CM, SABR>>;
 
 #[cfg(feature = "first_depleted")]
 pub type CgrFirstDepletedNodeParenting<NM, CM> =
-    Cgr<NM, CM, FirstDepleted<NM, CM, NodeParentingPath<NM, CM, SABR>>, RoutingTable<NM, CM, SABR>>;
+    Cgr<NM, CM, FirstDepleted<NM, CM, NodeParentingPath<NM, CM, SABR, SABR>>, RoutingTable<NM, CM, SABR>>;
 
 #[cfg(all(feature = "contact_work_area", feature = "contact_suppression"))]
 pub type CgrFirstEndingContactParenting<NM, CM> = Cgr<
     NM,
     CM,
-    FirstEnding<NM, CM, ContactParentingPath<NM, CM, SABR>>,
+    FirstEnding<NM, CM, ContactParentingPath<NM, CM, SABR, SABR>>,
     RoutingTable<NM, CM, SABR>,
 >;
 
@@ -83,55 +83,55 @@ pub type CgrFirstEndingContactParenting<NM, CM> = Cgr<
 pub type CgrFirstDepletedContactParenting<NM, CM> = Cgr<
     NM,
     CM,
-    FirstDepleted<NM, CM, ContactParentingPath<NM, CM, SABR>>,
+    FirstDepleted<NM, CM, ContactParentingPath<NM, CM, SABR, SABR>>,
     RoutingTable<NM, CM, SABR>,
 >;
 
 pub type SpsnHybridParentingHop<NM, CM> =
-    Spsn<NM, CM, HybridParentingTreeExcl<NM, CM, Hop>, TreeCache<NM, CM>>;
+    Spsn<NM, CM, HybridParentingTreeExcl<NM, CM, Hop, Hop>, TreeCache<NM, CM>>;
 
 pub type SpsnNodeParentingHop<NM, CM> =
-    Spsn<NM, CM, NodeParentingTreeExcl<NM, CM, Hop>, TreeCache<NM, CM>>;
+    Spsn<NM, CM, NodeParentingTreeExcl<NM, CM, Hop, Hop>, TreeCache<NM, CM>>;
 
 #[cfg(feature = "contact_work_area")]
 pub type SpsnContactParentingHop<NM, CM> =
-    Spsn<NM, CM, ContactParentingTreeExcl<NM, CM, Hop>, TreeCache<NM, CM>>;
+    Spsn<NM, CM, ContactParentingTreeExcl<NM, CM, Hop, Hop>, TreeCache<NM, CM>>;
 
 pub type VolCgrHybridParentingHop<NM, CM> =
-    VolCgr<NM, CM, HybridParentingPathExcl<NM, CM, Hop>, RoutingTable<NM, CM, Hop>>;
+    VolCgr<NM, CM, HybridParentingPathExcl<NM, CM, Hop, Hop>, RoutingTable<NM, CM, Hop>>;
 
 pub type VolCgrNodeParentingHop<NM, CM> =
-    VolCgr<NM, CM, NodeParentingPathExcl<NM, CM, Hop>, RoutingTable<NM, CM, Hop>>;
+    VolCgr<NM, CM, NodeParentingPathExcl<NM, CM, Hop, Hop>, RoutingTable<NM, CM, Hop>>;
 
 #[cfg(feature = "contact_work_area")]
 pub type VolCgrContactParentingHop<NM, CM> =
-    VolCgr<NM, CM, ContactParentingPathExcl<NM, CM, Hop>, RoutingTable<NM, CM, Hop>>;
+    VolCgr<NM, CM, ContactParentingPathExcl<NM, CM, Hop, Hop>, RoutingTable<NM, CM, Hop>>;
 
 #[cfg(feature = "contact_suppression")]
 pub type CgrFirstEndingHybridParentingHop<NM, CM> =
-    Cgr<NM, CM, FirstEnding<NM, CM, HybridParentingPath<NM, CM, Hop>>, RoutingTable<NM, CM, Hop>>;
+    Cgr<NM, CM, FirstEnding<NM, CM, HybridParentingPath<NM, CM, Hop, Hop>>, RoutingTable<NM, CM, Hop>>;
 
 #[cfg(feature = "first_depleted")]
 pub type CgrFirstDepletedHybridParentingHop<NM, CM> =
-    Cgr<NM, CM, FirstDepleted<NM, CM, HybridParentingPath<NM, CM, Hop>>, RoutingTable<NM, CM, Hop>>;
+    Cgr<NM, CM, FirstDepleted<NM, CM, HybridParentingPath<NM, CM, Hop, Hop>>, RoutingTable<NM, CM, Hop>>;
 
 #[cfg(feature = "contact_suppression")]
 pub type CgrFirstEndingNodeParentingHop<NM, CM> =
-    Cgr<NM, CM, FirstEnding<NM, CM, NodeParentingPath<NM, CM, Hop>>, RoutingTable<NM, CM, Hop>>;
+    Cgr<NM, CM, FirstEnding<NM, CM, NodeParentingPath<NM, CM, Hop, Hop>>, RoutingTable<NM, CM, Hop>>;
 
 #[cfg(feature = "first_depleted")]
 pub type CgrFirstDepletedNodeParentingHop<NM, CM> =
-    Cgr<NM, CM, FirstDepleted<NM, CM, NodeParentingPath<NM, CM, Hop>>, RoutingTable<NM, CM, Hop>>;
+    Cgr<NM, CM, FirstDepleted<NM, CM, NodeParentingPath<NM, CM, Hop, Hop>>, RoutingTable<NM, CM, Hop>>;
 
 #[cfg(all(feature = "contact_work_area", feature = "contact_suppression"))]
 pub type CgrFirstEndingContactParentingHop<NM, CM> =
-    Cgr<NM, CM, FirstEnding<NM, CM, ContactParentingPath<NM, CM, Hop>>, RoutingTable<NM, CM, Hop>>;
+    Cgr<NM, CM, FirstEnding<NM, CM, ContactParentingPath<NM, CM, Hop, Hop>>, RoutingTable<NM, CM, Hop>>;
 
 #[cfg(all(feature = "contact_work_area", feature = "first_depleted"))]
 pub type CgrFirstDepletedContactParentingHop<NM, CM> = Cgr<
     NM,
     CM,
-    FirstDepleted<NM, CM, ContactParentingPath<NM, CM, Hop>>,
+    FirstDepleted<NM, CM, ContactParentingPath<NM, CM, Hop, Hop>>,
     RoutingTable<NM, CM, Hop>,
 >;
 

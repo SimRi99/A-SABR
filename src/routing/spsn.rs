@@ -137,7 +137,7 @@ impl<S: TreeStorage<NM, CM>, NM: NodeManager, CM: ContactManager, P: Pathfinding
 
         let new_tree = self
             .pathfinding
-            .get_next(curr_time, source, bundle, excluded_nodes);
+            .get_next(curr_time, source, bundle, excluded_nodes, &None);
         let tree_ref = Rc::new(RefCell::new(new_tree));
 
         self.route_storage
@@ -202,7 +202,7 @@ impl<S: TreeStorage<NM, CM>, NM: NodeManager, CM: ContactManager, P: Pathfinding
 
         let new_tree = self
             .pathfinding
-            .get_next(curr_time, source, bundle, excluded_nodes);
+            .get_next(curr_time, source, bundle, excluded_nodes, &None);
         let tree = Rc::new(RefCell::new(new_tree));
         self.route_storage.borrow_mut().store(bundle, tree.clone());
 
