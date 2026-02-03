@@ -132,7 +132,7 @@ impl<NM: NodeManager, CM: ContactManager> Multigraph<NM, CM> {
     /// # Returns
     ///
     /// * `Self` - A new instance of `Multigraph`.
-    pub fn new(mut nodes: Vec<Node<NM>>, mut contact_plan: Vec<Contact<NM, CM>>) -> Self {
+    pub fn new(mut nodes: Vec<Node<NM>>, mut contact_plan: Vec<Contact<NM, CM>>, distances: Vec<Vec<Duration>>) -> Self {
         // the contact plan might not be sorted
         // having a sorted list of contacts allow easy multigraph creation
         let node_count = nodes.len();
@@ -191,7 +191,7 @@ impl<NM: NodeManager, CM: ContactManager> Multigraph<NM, CM> {
         Self {
             senders,
             nodes: all_refs,
-            min_delay_between_nodes: vec![],
+            min_delay_between_nodes: distances,
             node_count,
         }
     }

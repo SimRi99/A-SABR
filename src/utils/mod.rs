@@ -27,6 +27,7 @@ pub fn init_pathfinding<
     P::new(Rc::new(RefCell::new(Multigraph::new(
         nodes_n_contacts.0,
         nodes_n_contacts.1,
+        vec![]
     ))))
 }
 

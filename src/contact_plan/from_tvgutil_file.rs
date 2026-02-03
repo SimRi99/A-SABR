@@ -81,7 +81,7 @@ pub struct TVGUtilContactPlan {}
 impl TVGUtilContactPlan {
     pub fn parse<NM: NodeManager, CM: FromTVGUtilContactData<NM, CM> + ContactManager>(
         filename: &str,
-    ) -> io::Result<(Vec<Node<NoManagement>>, Vec<Contact<NM, CM>>)> {
+    ) -> io::Result<(Vec<Node<NoManagement>>, Vec<Contact<NM, CM>>, Vec<Vec<Duration>>)> {
         let mut nodes: Vec<Node<NoManagement>> = Vec::new();
         let mut contacts: Vec<Contact<NM, CM>> = Vec::new();
 
@@ -140,6 +140,19 @@ impl TVGUtilContactPlan {
                 contacts.push(contact);
             }
         }
-        Ok((nodes, contacts))
+
+        // Add entry for each node
+        let mut distances: Vec<Vec<Duration>> = vec![vec![0.0; nodes.len()]; nodes.len()];
+        if let Some(distances_block) = parsed.get("distances") {
+            let distances_nodes = distances_block.as_object().unwrap();
+            for (tx_node, tx_dict) in distances_nodes {
+                if let Some(tx_map) = tx_dict.as_object() {
+                    for (rx_node, distance) in tx_map {
+                        distances[tx_node.parse::<usize>().unwrap()][rx_node.parse::<usize>().unwrap()] = distance.as_f64().unwrap()
+                    }
+                }
+            }
+        }
+        Ok((nodes, contacts, distances))
     }
 }

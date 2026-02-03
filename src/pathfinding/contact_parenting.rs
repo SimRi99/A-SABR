@@ -35,7 +35,7 @@ macro_rules! define_contact_graph {
         /// queue
         /// * `HD` - A type that implements a `Distance` between route stages based on heuristics
         /// to decide which node to extract next from the priority queue
-        pub struct $name<NM: NodeManager, CM: ContactManager, RD: Distance<NM, CM>, HD: Distance<NM, CM>> {
+        pub struct $name<NM: NodeManager, CM: ContactManager, RD: Distance<NM, CM>, HD: Distance<NM, CM>, H: Heuristic<NM, CM>> {
             /// The node multigraph for contact access.
             graph: Rc<RefCell<Multigraph<NM, CM>>>,
             /// For tree construction, tracks the nodes visited as transmitters.
@@ -46,14 +46,16 @@ macro_rules! define_contact_graph {
             visited_as_tx_count: usize,
             /// For tree construction, tracks the count of nodes visited as receivers.
             visited_as_rx_count: usize,
+            /// The heuristic to be used
+            heuristic:  Rc<RefCell<H>,
 
             #[doc(hidden)]
             _phantom_distance_rd: PhantomData<RD>,
-            _phantom_distance_hd: PhantomData<RD>,
+            _phantom_distance_hd: PhantomData<HD>,
         }
 
-        impl<NM: NodeManager, CM: ContactManager, RD: Distance<NM, CM>, HD: Distance<NM, CM>> Pathfinding<NM, CM>
-            for $name<NM, CM, RD, HD>
+        impl<NM: NodeManager, CM: ContactManager, RD: Distance<NM, CM>, HD: Distance<NM, CM>, H: Heuristic<NM, CM>> Pathfinding<NM, CM>
+            for $name<NM, CM, RD, HD, H>
         {
             /// Constructs a new `ContactParenting` instance with the provided nodes and contacts.
             ///
@@ -76,6 +78,7 @@ macro_rules! define_contact_graph {
                     visited_as_rx_ids: vec![false; node_count],
                     visited_as_tx_count: 1,
                     visited_as_rx_count: 1,
+                    heuristic: Rc::new(RefCell::new(H::new())),
                     _phantom_distance_rd: PhantomData,
                     _phantom_distance_hd: PhantomData,
                 }
@@ -102,12 +105,14 @@ macro_rules! define_contact_graph {
                 source: NodeID,
                 bundle: &Bundle,
                 excluded_nodes_sorted: &[NodeID],
-                heuristic: &Option<Rc<RefCell<&mut dyn Heuristic<NM, CM>>>>
             ) -> PathFindingOutput<NM, CM> {
-                let mut graph = self.graph.borrow_mut();
-                if $with_exclusions {
-                    graph.prepare_for_exclusions_sorted(excluded_nodes_sorted);
+                {
+                    let mut graph = self.graph.borrow_mut();
+                    if $with_exclusions {
+                        graph.prepare_for_exclusions_sorted(excluded_nodes_sorted);
+                    }
                 }
+
                 let source_route: Rc<RefCell<RouteStage<NM, CM>>> =
                     Rc::new(RefCell::new(RouteStage::new(
                         current_time,
@@ -158,9 +163,19 @@ macro_rules! define_contact_graph {
                         }
                     }
 
-                    let sender = &mut graph.senders[tx_node_id as usize];
+                    // First, we update the entries to get immutable borrows afterward
+                    {
+                        let mut graph = self.graph.borrow_mut();
+                        let sender = &mut graph.senders[tx_node_id as usize];
+                        for receiver in &mut sender.receivers {
+                            receiver.lazy_prune_and_get_first_idx(from_route.borrow().at_time);
+                        }
+                    }
 
-                    for receiver in &mut sender.receivers {
+                    let graph = self.graph.borrow();
+                    let sender = & graph.senders[tx_node_id as usize];
+                    for receiver in & sender.receivers {
+
                         if $with_exclusions {
                             if receiver.is_excluded() {
                                 continue;
@@ -168,7 +183,7 @@ macro_rules! define_contact_graph {
                         }
 
                         if let Some(first_contact_index) =
-                            receiver.lazy_prune_and_get_first_idx(from_route.borrow().at_time)
+                            receiver.get_first_idx(from_route.borrow().at_time)
                         {
                             if let Some(route_proposition) = try_make_hop(
                                 first_contact_index,
@@ -177,7 +192,8 @@ macro_rules! define_contact_graph {
                                 &receiver.contacts_to_receiver,
                                 &sender.node,
                                 &receiver.node,
-                                heuristic
+                                Some(Rc::clone(&self.heuristic)),
+                                &graph
                             ) {
                                 let mut push = false;
                                 if let Some(hop) = &route_proposition.via {

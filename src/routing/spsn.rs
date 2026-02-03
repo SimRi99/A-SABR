@@ -11,7 +11,7 @@ use crate::{
 };
 
 use std::{cell::RefCell, marker::PhantomData, rc::Rc};
-
+use crate::types::Duration;
 use super::{schedule_multicast, schedule_unicast, Router, RoutingOutput};
 
 /// A structure representing the Shortest Path with Safety Nodes (SPSN) algorithm.
@@ -84,11 +84,12 @@ impl<S: TreeStorage<NM, CM>, NM: NodeManager, CM: ContactManager, P: Pathfinding
     pub fn new(
         nodes: Vec<Node<NM>>,
         contacts: Vec<Contact<NM, CM>>,
+        distances: Vec<Vec<Duration>>,
         route_storage: Rc<RefCell<S>>,
         with_priorities: bool,
     ) -> Self {
         Self {
-            pathfinding: P::new(Rc::new(RefCell::new(Multigraph::new(nodes, contacts)))),
+            pathfinding: P::new(Rc::new(RefCell::new(Multigraph::new(nodes, contacts, distances)))),
             route_storage: route_storage.clone(),
             unicast_guard: Guard::new(with_priorities),
             // for compilation
@@ -137,7 +138,7 @@ impl<S: TreeStorage<NM, CM>, NM: NodeManager, CM: ContactManager, P: Pathfinding
 
         let new_tree = self
             .pathfinding
-            .get_next(curr_time, source, bundle, excluded_nodes, &None);
+            .get_next(curr_time, source, bundle, excluded_nodes);
         let tree_ref = Rc::new(RefCell::new(new_tree));
 
         self.route_storage
@@ -202,7 +203,7 @@ impl<S: TreeStorage<NM, CM>, NM: NodeManager, CM: ContactManager, P: Pathfinding
 
         let new_tree = self
             .pathfinding
-            .get_next(curr_time, source, bundle, excluded_nodes, &None);
+            .get_next(curr_time, source, bundle, excluded_nodes);
         let tree = Rc::new(RefCell::new(new_tree));
         self.route_storage.borrow_mut().store(bundle, tree.clone());
 

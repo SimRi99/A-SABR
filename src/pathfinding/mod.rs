@@ -8,7 +8,7 @@ use crate::types::{Date, NodeID};
 use crate::{bundle::Bundle, route_stage::RouteStage};
 use std::cell::RefCell;
 use std::rc::Rc;
-use crate::heuristic::Heuristic;
+use crate::heuristic::{Heuristic, HeuristicResult};
 
 #[cfg(feature = "contact_work_area")]
 pub mod contact_parenting;
@@ -122,7 +122,6 @@ pub trait Pathfinding<NM: NodeManager, CM: ContactManager> {
         source: NodeID,
         bundle: &Bundle,
         excluded_nodes_sorted: &[NodeID],
-        heuristic: &Option<Rc<RefCell<&mut dyn Heuristic<NM, CM>>>>
     ) -> PathFindingOutput<NM, CM>;
 
     /// Get a shared pointer to the multigraph.
@@ -148,14 +147,15 @@ pub trait Pathfinding<NM: NodeManager, CM: ContactManager> {
 /// # Returns
 ///
 /// An `Option` containing a `RouteStage` if a suitable hop is found, or `None` if no valid hop is available.
-pub fn try_make_hop<NM: NodeManager, CM: ContactManager>(
+pub fn try_make_hop<NM: NodeManager, CM: ContactManager, H: Heuristic<NM, CM>>(
     first_contact_index: usize,
     sndr_route: &Rc<RefCell<RouteStage<NM, CM>>>,
     bundle: &Bundle,
     contacts: &[Rc<RefCell<Contact<NM, CM>>>],
     tx_node: &Rc<RefCell<Node<NM>>>,
     rx_node: &Rc<RefCell<Node<NM>>>,
-    heuristic: &Option<Rc<RefCell<&mut dyn Heuristic<NM, CM>>>>
+    heuristic_option: Option<Rc<RefCell<H>>>,
+    multigraph: & Multigraph<NM, CM>
 ) -> Option<RouteStage<NM, CM>> {
     let mut index = 0;
     let mut final_data = ContactManagerTxData {
@@ -240,9 +240,10 @@ pub fn try_make_hop<NM: NodeManager, CM: ContactManager>(
             bundle_to_consider,
         );
 
-        if let Some(heuristic_value) = heuristic {
-            route_proposition.at_time_heuristic = heuristic_value.borrow_mut().compute_at_time_heuristic(&route_proposition, bundle);
-            route_proposition.hop_count_heuristic = heuristic_value.borrow_mut().compute_hop_count_heuristic(&route_proposition, bundle);
+        if let Some(heuristic) = &heuristic_option {
+            let heuristic_result: HeuristicResult = heuristic.borrow_mut().compute_heuristics(&route_proposition, bundle, multigraph);
+            route_proposition.at_time_heuristic = heuristic_result.at_time_heuristic;
+            route_proposition.hop_count_heuristic = heuristic_result.hop_count_heuristic;
         }
 
         route_proposition.hop_count = sndr_route_borrowed.hop_count + 1;

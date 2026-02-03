@@ -1,6 +1,6 @@
-mod zero;
-mod owlt;
-mod k_look_ahead;
+pub(crate) mod zero;
+pub(crate) mod owlt;
+pub(crate) mod k_look_ahead;
 
 use std::cell::RefCell;
 use std::collections::HashSet;
@@ -11,6 +11,15 @@ use crate::multigraph::Multigraph;
 use crate::node_manager::NodeManager;
 use crate::route_stage::RouteStage;
 use crate::types::{Date, HopCount, NodeID};
+
+
+pub struct HeuristicResult{
+    // A heuristic value for the at_time
+    pub at_time_heuristic: Date,
+
+    // A heuristic value for the hop count
+    pub hop_count_heuristic: HopCount
+}
 
 /// A trait for defining heuristic functions.
 ///
@@ -24,50 +33,35 @@ use crate::types::{Date, HopCount, NodeID};
 /// * `CM` - A generic type that implements the `ContactManager` trait.
 
 pub trait Heuristic<NM: NodeManager, CM: ContactManager> {
-    /// Creates a new instance of the heuristic function with the provided multigraph and target id.
+    /// Creates a new instance of the heuristic function with the provided multigraph.
     ///
     /// # Parameters
     ///
     /// * `multigraph` - A pointer to the multigraph.
-    /// * `target_id` - The node id of the target.
     ///
     /// # Returns
     ///
     /// A new instance of the struct implementing `Heuristic`.
-    fn new(multigraph: Rc<RefCell<Multigraph<NM, CM>>>, target: NodeID) -> Box<dyn Heuristic<NM, CM>> where Self: Sized;
+    fn new() -> Self;
 
-
-    /// Predicts the heuristic_at_time for a given route stage, i.e., the estimated at_time
-    /// when the bundle will be received at its target.
+    /// Compute all relevant heuristic values required for a heuristic result, e.g., the at_time
+    /// heuristics, or the hop count heuristic.
     ///
     /// # Parameters
     ///
     /// * `route_stage` - A reference to the `RouteStage` whose remaining distance has to be measured.
+    /// * `bundle` - A reference to the `Bundle` to be routed.
     ///
     /// # Returns
     ///
-    /// * `Date` - The date at which the bundle is received.
-    fn compute_at_time_heuristic(
-        &mut self,
-        route_stage: &RouteStage<NM, CM>,
-        bundle: &Bundle
-    ) -> Date;
+    /// * `HeuristicResult` - The results of the heuristic computations.
+    fn compute_heuristics(&mut self, route_stage: &RouteStage<NM, CM>, bundle: &Bundle, multigraph: &Multigraph<NM, CM>) -> HeuristicResult;
 
-    /// Predict the predicate hop counts for a `RouteStage`,
-    /// i.e., the predicated amount of hops a bundle has to make before reaching its target.
-    ///
-    /// # Parameters
-    /// * `route_stage` - A reference to the `RouteStage` whose remaining hop_count has to be measured.
-    ///
-    /// # Returns
-    ///
-    /// * `HopCount` - The hop count how many hop_counts have to be made in order the target.
-    fn compute_hop_count_heuristic(&mut self, route_stage: &RouteStage<NM, CM>, bundle: &Bundle) -> HopCount;
-
-    /// Sets a hashset of visited nodes, which is relevant for certain heursitics, e.g. the k_look_ahead
-    /// heuristic
+    /// Sets up the heuristic with the bundle, as well as a shared visited set, such that certain
+    /// heuristics can keep track of which nodes has been traversed already
     ///
     /// # Parameters
     /// * `visited` - A shared set of visited nodes.
-    fn set_visited_set(&mut self, visited: Rc<RefCell<HashSet<NodeID>>>);
+    /// * `visited` - Optionally, a shared reference to a hashset if nodes should be collected
+    fn setup(&mut self, bundle: &Bundle);
 }

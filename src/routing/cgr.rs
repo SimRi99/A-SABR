@@ -12,7 +12,7 @@ use crate::{
 };
 
 use std::{cell::RefCell, marker::PhantomData, rc::Rc};
-
+use crate::types::Duration;
 use super::{dry_run_unicast_path, schedule_unicast_path, Router, RoutingOutput};
 
 pub struct Cgr<NM: NodeManager, CM: ContactManager, P: Pathfinding<NM, CM>, S: RouteStorage<NM, CM>>
@@ -55,10 +55,11 @@ impl<S: RouteStorage<NM, CM>, NM: NodeManager, CM: ContactManager, P: Pathfindin
     pub fn new(
         nodes: Vec<Node<NM>>,
         contacts: Vec<Contact<NM, CM>>,
+        distances: Vec<Vec<Duration>>,
         route_storage: Rc<RefCell<S>>,
     ) -> Self {
         Self {
-            pathfinding: P::new(Rc::new(RefCell::new(Multigraph::new(nodes, contacts)))),
+            pathfinding: P::new(Rc::new(RefCell::new(Multigraph::new(nodes, contacts, distances)))),
             route_storage: route_storage.clone(),
             // for compilation
             _phantom_nm: PhantomData,
@@ -98,7 +99,7 @@ impl<S: RouteStorage<NM, CM>, NM: NodeManager, CM: ContactManager, P: Pathfindin
         loop {
             let new_tree =
                 self.pathfinding
-                    .get_next(curr_time, source, &bundle_to_consider, excluded_nodes, &None);
+                    .get_next(curr_time, source, &bundle_to_consider, excluded_nodes);
             let tree = Rc::new(RefCell::new(new_tree));
 
             if let Some(route) = Route::from_tree(tree, dest) {

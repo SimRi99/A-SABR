@@ -31,16 +31,17 @@ macro_rules! define_node_graph {
         /// queue
         /// * `HD` - A type that implements a `Distance` between route stages based on heuristics
         /// to decide which node to extract next from the priority queue
-        pub struct $name<NM: NodeManager, CM: ContactManager, RD: Distance<NM, CM>, HD: Distance<NM, CM>> {
+        pub struct $name<NM: NodeManager, CM: ContactManager, RD: Distance<NM, CM>, HD: Distance<NM, CM>, H: Heuristic<NM, CM>> {
             /// The node multigraph for contact access.
             graph: Rc<RefCell<Multigraph<NM, CM>>>,
+            heuristic: Rc<RefCell<H>>,
             #[doc(hidden)]
             _phantom_distance_rd: PhantomData<RD>,
             _phantom_distance_hd: PhantomData<HD>,
         }
 
-        impl<NM: NodeManager, CM: ContactManager, RD: Distance<NM, CM>, HD: Distance<NM, CM>> Pathfinding<NM, CM>
-            for $name<NM, CM, RD, HD>
+        impl<NM: NodeManager, CM: ContactManager, RD: Distance<NM, CM>, HD: Distance<NM, CM>, H: Heuristic<NM, CM>> Pathfinding<NM, CM>
+            for $name<NM, CM, RD, HD, H>
         {
             /// Constructs a new `NodeParenting` instance with the provided nodes and contacts.
             ///
@@ -53,7 +54,8 @@ macro_rules! define_node_graph {
             #[doc = concat!( " * `Self` - A new instance of `",stringify!($name),"`.")]
             fn new(multigraph: Rc<RefCell<Multigraph<NM, CM>>>) -> Self {
                 Self {
-                    graph: multigraph,
+                    graph: Rc::clone(&multigraph),
+                    heuristic: Rc::new(RefCell::new(H::new())),
                     _phantom_distance_rd: PhantomData,
                     _phantom_distance_hd: PhantomData,
                 }
@@ -79,14 +81,15 @@ macro_rules! define_node_graph {
                 current_time: Date,
                 source: NodeID,
                 bundle: &Bundle,
-                excluded_nodes_sorted: &[NodeID],
-                heuristic: &Option<Rc<RefCell<&mut dyn Heuristic<NM, CM>>>>
+                excluded_nodes_sorted: &[NodeID]
             ) -> PathFindingOutput<NM, CM> {
-                let mut graph = self.graph.borrow_mut();
-
-                if $with_exclusions {
-                    graph.prepare_for_exclusions_sorted(excluded_nodes_sorted);
+                {
+                    let mut graph = self.graph.borrow_mut();
+                    if $with_exclusions {
+                        graph.prepare_for_exclusions_sorted(excluded_nodes_sorted);
+                    }
                 }
+
                 let source_route: Rc<RefCell<RouteStage<NM, CM>>> =
                     Rc::new(RefCell::new(RouteStage::new(
                         current_time,
@@ -99,13 +102,13 @@ macro_rules! define_node_graph {
                     bundle,
                     source_route.clone(),
                     excluded_nodes_sorted,
-                    graph.senders.len(),
+                    self.graph.borrow().senders.len(),
                 );
 
                 let mut priority_queue: BinaryHeap<Reverse<DistanceWrapper<NM, CM, HD>>> =
                     BinaryHeap::new();
 
-                for node_id in 0..graph.get_node_count() {
+                for node_id in 0..self.graph.borrow().get_node_count() {
                     if node_id == source as usize {
                         tree.by_destination[node_id as usize] = Some(source_route.clone());
                     } else {
@@ -125,9 +128,20 @@ macro_rules! define_node_graph {
                             break;
                         }
                     }
-                    let sender = &mut graph.senders[tx_node_id as usize];
 
-                    for receiver in &mut sender.receivers {
+                    // First, we update the entries to get immutable borrows afterward
+                    {
+                        let mut graph = self.graph.borrow_mut();
+                        let sender = &mut graph.senders[tx_node_id as usize];
+                        for receiver in &mut sender.receivers {
+                            receiver.lazy_prune_and_get_first_idx(from_route.borrow().at_time);
+                        }
+                    }
+
+                    let graph = self.graph.borrow();
+                    let sender = & graph.senders[tx_node_id as usize];
+
+                    for receiver in & sender.receivers {
                         if $with_exclusions {
                             if receiver.is_excluded() {
                                 continue;
@@ -135,7 +149,7 @@ macro_rules! define_node_graph {
                         }
 
                         if let Some(first_contact_index) =
-                            receiver.lazy_prune_and_get_first_idx(from_route.borrow().at_time)
+                            receiver.get_first_idx(from_route.borrow().at_time)
                         {
                             if let Some(route_proposition) = try_make_hop(
                                 first_contact_index,
@@ -144,7 +158,8 @@ macro_rules! define_node_graph {
                                 &receiver.contacts_to_receiver,
                                 &sender.node,
                                 &receiver.node,
-                                heuristic
+                                Some(Rc::clone(&self.heuristic)),
+                                &graph
                             ) {
                                 let mut push = false;
                                 if let Some(know_route_ref) = tree.by_destination
