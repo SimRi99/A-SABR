@@ -1,3 +1,4 @@
+use std::time::Instant;
 use criterion::black_box;
 use a_sabr::bundle::Bundle;
 use a_sabr::contact_manager::seg::SegmentationManager;
@@ -7,16 +8,16 @@ use a_sabr::routing::aliases::{build_generic_router, SpsnOptions};
 use a_sabr::types::NodeID;
 
 #[test]
-fn test_pathfinding_spsn() {
-    let ptvg_filepath = "benches/ptvg_files/sample1.json";
+fn test_pathfinding_cgr() {
+    let ptvg_filepath = "benches/data.json";
 
-    let source = 178;
+    let source = 0;
     let bundle = Bundle {
-        source: 178,
-        destinations: vec![159],
+        source,
+        destinations: vec![500],
         priority: 0,
-        size: 47419533.0,
-        expiration: 24060.0,
+        size: 0.0,
+        expiration: 124060.0,
     };
     let curr_time = 60.0;
     let excluded_nodes: Vec<NodeID> = vec![];
@@ -26,13 +27,19 @@ fn test_pathfinding_spsn() {
         max_entries: 10,
     };
 
+    let start = Instant::now();
     let (nodes, contacts, durations) = TVGUtilContactPlan::parse::<
         NoManagement,
         SegmentationManager,
     >(ptvg_filepath)
         .unwrap();
+    let duration = start.elapsed();
+    println!("YOOOO: {:?}", duration);
 
-    let router_type= "SpsnHybridParentingKLookAheadOwlt";
+    //let router_type= "VolCgrHybridParentingKLookAheadOwlt";
+    //let router_type= "VolCgrHybridParentingOwlt";
+    //let router_type= "VolCgrHybridParenting";
+    let router_type = "VolCgrHybridParentingKLookAheadMinOwlt";
     let mut router = build_generic_router(router_type, nodes, contacts, durations, Some(spsn_opts.clone()));
     router.route(
         black_box(source),

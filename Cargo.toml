@@ -27,7 +27,7 @@ manual_queueing = []
 criterion = "0.3"
 
 [[bench]]
-name = "spsn_benchmark"
+name = "astar_benchmark"
 harness = false
 
 [[example]]

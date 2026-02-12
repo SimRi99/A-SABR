@@ -2,7 +2,7 @@ use std::{
     cell::RefCell, cmp::Ordering, cmp::Reverse, collections::BinaryHeap, marker::PhantomData,
     rc::Rc,
 };
-
+use std::collections::HashSet;
 use crate::{
     bundle::Bundle,
     contact_manager::ContactManager,
@@ -90,6 +90,11 @@ macro_rules! define_node_graph {
                     }
                 }
 
+                {
+                    let mut heuristic = self.heuristic.borrow_mut();
+                    heuristic.setup(bundle);
+                }
+
                 let source_route: Rc<RefCell<RouteStage<NM, CM>>> =
                     Rc::new(RefCell::new(RouteStage::new(
                         current_time,
@@ -107,6 +112,8 @@ macro_rules! define_node_graph {
 
                 let mut priority_queue: BinaryHeap<Reverse<DistanceWrapper<NM, CM, HD>>> =
                     BinaryHeap::new();
+
+                let visited: Rc<RefCell<HashSet<NodeID>>> = Rc::new(RefCell::new(HashSet::new()));
 
                 for node_id in 0..self.graph.borrow().get_node_count() {
                     if node_id == source as usize {
@@ -159,7 +166,8 @@ macro_rules! define_node_graph {
                                 &sender.node,
                                 &receiver.node,
                                 Some(Rc::clone(&self.heuristic)),
-                                &graph
+                                &graph,
+                                &visited.borrow()
                             ) {
                                 let mut push = false;
                                 if let Some(know_route_ref) = tree.by_destination
@@ -167,7 +175,7 @@ macro_rules! define_node_graph {
                                     .clone()
                                 {
                                     let mut known_route = know_route_ref.borrow_mut();
-                                    if RD::cmp(&route_proposition, &known_route) == Ordering::Less {
+                                    if HD::cmp(&route_proposition, &known_route) == Ordering::Less {
                                         known_route.is_disabled = true;
                                         push = true;
                                     }

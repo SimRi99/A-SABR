@@ -1,11 +1,6 @@
-use std::{
-    cell::RefCell,
-    cmp::{Ordering, Reverse},
-    collections::BinaryHeap,
-    marker::PhantomData,
-    rc::Rc,
-};
-
+use std::{cell::RefCell, cmp::{Ordering, Reverse}, collections::BinaryHeap, marker::PhantomData, rc::Rc, time};
+use std::collections::HashSet;
+use std::time::Instant;
 use crate::{
     bundle::Bundle,
     contact_manager::ContactManager,
@@ -306,6 +301,11 @@ macro_rules! define_mpt {
                     }
                 }
 
+                {
+                    let mut heuristic = self.heuristic.borrow_mut();
+                    heuristic.setup(bundle);
+                }
+
                 let source_route: Rc<RefCell<RouteStage<NM, CM>>> =
                     Rc::new(RefCell::new(RouteStage::new(
                         current_time,
@@ -314,6 +314,8 @@ macro_rules! define_mpt {
                         #[cfg(feature = "node_proc")]
                         bundle.clone(),
                     )));
+
+                let visited: Rc<RefCell<HashSet<NodeID>>> = Rc::new(RefCell::new(HashSet::new()));
 
                 let mut tree: HybridParentingWorkArea<NM, CM> = HybridParentingWorkArea::new(
                     bundle,
@@ -327,12 +329,16 @@ macro_rules! define_mpt {
                 tree.by_destination[source as usize].push(source_route.clone());
                 priority_queue.push(Reverse(DistanceWrapper::new(Rc::clone(&source_route))));
 
+                let start = Instant::now();
+                let mut i = 0;
                 while let Some(Reverse(DistanceWrapper(from_route, _))) = priority_queue.pop() {
                     if from_route.borrow().is_disabled {
                         continue;
                     }
+                    i += 1;
 
                     let tx_node_id = from_route.borrow().to_node;
+                    visited.borrow_mut().insert(tx_node_id);
 
                     if !$is_tree_output {
                         if bundle.destinations[0] == tx_node_id {
@@ -371,10 +377,11 @@ macro_rules! define_mpt {
                                 &receiver.node,
                                 Some(Rc::clone(&self.heuristic)),
                                 &graph,
+                                &visited.borrow()
                             ) {
                                 // This transforms a prop in the stack to a prop in the heap
                                 if let Some(new_route) =
-                                    try_insert::<NM, CM, RD>(route_proposition, &mut tree)
+                                    try_insert::<NM, CM, HD>(route_proposition, &mut tree)
                                 {
                                     priority_queue
                                         .push(Reverse(DistanceWrapper::new(new_route.clone())));
@@ -383,12 +390,15 @@ macro_rules! define_mpt {
                         }
                     }
                 }
+                let end = start.elapsed();
+                println!("Time: {:?}", end);
 
                 // totally fine as we have Rcs
                 for v in &mut tree.by_destination {
                     v.truncate(1);
                 }
 
+                println!("State expansions: {}", i);
                 return tree.to_pathfinding_output();
             }
 
@@ -400,6 +410,7 @@ macro_rules! define_mpt {
             fn get_multigraph(&self) -> Rc<RefCell<Multigraph<NM, CM>>> {
                 return self.graph.clone();
             }
+
         }
     };
 }

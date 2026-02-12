@@ -7,7 +7,9 @@ use crate::route_stage::ViaHop;
 use crate::types::{Date, NodeID};
 use crate::{bundle::Bundle, route_stage::RouteStage};
 use std::cell::RefCell;
+use std::collections::HashSet;
 use std::rc::Rc;
+use std::time::Instant;
 use crate::heuristic::{Heuristic, HeuristicResult};
 
 #[cfg(feature = "contact_work_area")]
@@ -155,7 +157,8 @@ pub fn try_make_hop<NM: NodeManager, CM: ContactManager, H: Heuristic<NM, CM>>(
     tx_node: &Rc<RefCell<Node<NM>>>,
     rx_node: &Rc<RefCell<Node<NM>>>,
     heuristic_option: Option<Rc<RefCell<H>>>,
-    multigraph: & Multigraph<NM, CM>
+    multigraph: & Multigraph<NM, CM>,
+    visited: &HashSet<NodeID>
 ) -> Option<RouteStage<NM, CM>> {
     let mut index = 0;
     let mut final_data = ContactManagerTxData {
@@ -241,7 +244,7 @@ pub fn try_make_hop<NM: NodeManager, CM: ContactManager, H: Heuristic<NM, CM>>(
         );
 
         if let Some(heuristic) = &heuristic_option {
-            let heuristic_result: HeuristicResult = heuristic.borrow_mut().compute_heuristics(&route_proposition, bundle, multigraph);
+            let heuristic_result: HeuristicResult = heuristic.borrow_mut().compute_heuristics(&route_proposition, bundle, multigraph, visited);
             route_proposition.at_time_heuristic = heuristic_result.at_time_heuristic;
             route_proposition.hop_count_heuristic = heuristic_result.hop_count_heuristic;
         }

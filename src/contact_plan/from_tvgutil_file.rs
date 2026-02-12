@@ -148,7 +148,9 @@ impl TVGUtilContactPlan {
             for (tx_node, tx_dict) in distances_nodes {
                 if let Some(tx_map) = tx_dict.as_object() {
                     for (rx_node, distance) in tx_map {
-                        distances[tx_node.parse::<usize>().unwrap()][rx_node.parse::<usize>().unwrap()] = distance.as_f64().unwrap()
+                        let tx_node_id: NodeID = *map_id_map.get(&tx_node as &str).unwrap();
+                        let rx_node_id: NodeID = *map_id_map.get(&rx_node as &str).unwrap();
+                        distances[tx_node_id as usize][rx_node_id as usize] = distance.as_f64().unwrap()
                     }
                 }
             }

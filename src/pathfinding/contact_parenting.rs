@@ -5,7 +5,7 @@ use std::{
     marker::PhantomData,
     rc::Rc,
 };
-
+use std::collections::HashSet;
 use crate::{
     bundle::Bundle,
     contact::Contact,
@@ -47,8 +47,7 @@ macro_rules! define_contact_graph {
             /// For tree construction, tracks the count of nodes visited as receivers.
             visited_as_rx_count: usize,
             /// The heuristic to be used
-            heuristic:  Rc<RefCell<H>,
-
+            heuristic:  Rc<RefCell<H>>,
             #[doc(hidden)]
             _phantom_distance_rd: PhantomData<RD>,
             _phantom_distance_hd: PhantomData<HD>,
@@ -113,6 +112,11 @@ macro_rules! define_contact_graph {
                     }
                 }
 
+                {
+                    let mut heuristic = self.heuristic.borrow_mut();
+                    heuristic.setup(bundle);
+                }
+
                 let source_route: Rc<RefCell<RouteStage<NM, CM>>> =
                     Rc::new(RefCell::new(RouteStage::new(
                         current_time,
@@ -126,7 +130,7 @@ macro_rules! define_contact_graph {
                     &bundle,
                     source_route.clone(),
                     &excluded_nodes_sorted,
-                    graph.senders.len(),
+                    self.graph.borrow().senders.len(),
                 );
                 let mut priority_queue: BinaryHeap<Reverse<DistanceWrapper<NM, CM, HD>>> =
                     BinaryHeap::new();
@@ -143,6 +147,7 @@ macro_rules! define_contact_graph {
 
                 tree.by_destination[source as usize] = Some(source_route.clone());
                 priority_queue.push(Reverse(DistanceWrapper::new(Rc::clone(&source_route))));
+                let visited: Rc<RefCell<HashSet<NodeID>>> = Rc::new(RefCell::new(HashSet::new()));
 
                 while let Some(Reverse(DistanceWrapper(from_route, _))) = priority_queue.pop() {
                     if from_route.borrow().is_disabled {
@@ -193,14 +198,15 @@ macro_rules! define_contact_graph {
                                 &sender.node,
                                 &receiver.node,
                                 Some(Rc::clone(&self.heuristic)),
-                                &graph
+                                &graph,
+                                &visited.borrow()
                             ) {
                                 let mut push = false;
                                 if let Some(hop) = &route_proposition.via {
                                     // todo : improve CF..
                                     if let Some(know_route_ref) = &hop.contact.borrow().work_area {
                                         let mut know_route = know_route_ref.borrow_mut();
-                                        if RD::cmp(&route_proposition, &know_route) == Ordering::Less
+                                        if HD::cmp(&route_proposition, &know_route) == Ordering::Less
                                         {
                                             // if "Test"
                                             know_route.is_disabled = true;
@@ -230,7 +236,7 @@ macro_rules! define_contact_graph {
                                             tree.by_destination[rx_node_id as usize].clone()
                                         {
                                             let known_best_route = know_route_ref.borrow_mut();
-                                            if RD::cmp(&route_proposition, &known_best_route)
+                                            if HD::cmp(&route_proposition, &known_best_route)
                                                 == Ordering::Less
                                             {
                                                 tree.by_destination[rx_node_id as usize] =

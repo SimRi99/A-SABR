@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use std::marker::PhantomData;
 use std::rc::Rc;
 use crate::contact_manager::ContactManager;
-use crate::heuristic::{Heuristic, HeuristicResult};
+use crate::heuristic::{Heuristic, HeuristicDelayResult, HeuristicResult};
 use crate::multigraph::Multigraph;
 use crate::node_manager::NodeManager;
 use crate::route_stage::RouteStage;
@@ -30,9 +30,9 @@ pub struct KLookAhead<NM: NodeManager, CM: ContactManager, H: Heuristic<NM, CM>>
 /// h*.
 
 impl<NM: NodeManager, CM: ContactManager, H: Heuristic<NM, CM>> KLookAhead<NM, CM, H> {
-    fn compute_for_k(&mut self, k: usize, route_stage: &RouteStage<NM, CM>, bundle: &Bundle, multigraph: &Multigraph<NM, CM>) {
+    fn compute_for_k(&mut self, k: usize, route_stage: &RouteStage<NM, CM>, bundle: &Bundle, multigraph: &Multigraph<NM, CM>, visited: &HashSet<NodeID>) {
         if k==0 {
-            let heuristic_result: HeuristicResult = self.final_heuristic.compute_heuristics(route_stage, bundle, multigraph);
+            let heuristic_result: HeuristicResult = self.final_heuristic.compute_heuristics(route_stage, bundle, multigraph, visited);
             self.check_for_best_date(heuristic_result.at_time_heuristic);
             self.check_for_best_hop_count(heuristic_result.hop_count_heuristic);
             return;
@@ -47,12 +47,12 @@ impl<NM: NodeManager, CM: ContactManager, H: Heuristic<NM, CM>> KLookAhead<NM, C
             Rc::new(RefCell::new(route_stage.clone_work_area()));
         let tx_node_id = route_stage.to_node;
 
-
+        self.add_node_to_visited(tx_node_id);
         let sender =  &multigraph.senders[tx_node_id as usize];
 
         for receiver in &sender.receivers {
             let receiver_id: NodeID = receiver.node.borrow().info.id;
-            if self.contains_node(receiver_id) {
+            if self.contains_node(receiver_id) || visited.contains(&receiver_id) {
                 continue;
             }
             self.add_node_to_visited(receiver_id);
@@ -67,13 +67,15 @@ impl<NM: NodeManager, CM: ContactManager, H: Heuristic<NM, CM>> KLookAhead<NM, C
                     &sender.node,
                     &receiver.node,
                     None,
-                    multigraph
+                    multigraph,
+                    visited
                 ) {
-                    self.compute_for_k(k - 1, &route_proposition, bundle, multigraph);
+                    self.compute_for_k(k - 1, &route_proposition, bundle, multigraph, visited);
                 }
             }
             self.remove_node_from_visited(receiver_id);
         }
+        self.remove_node_from_visited(tx_node_id);
     }
 
     // Check whether a newly found date might be the best one
@@ -108,12 +110,12 @@ impl<NM: NodeManager, CM: ContactManager, H: Heuristic<NM, CM>> KLookAhead<NM, C
 
 impl <NM: NodeManager +'static, CM: ContactManager +'static, H: Heuristic<NM, CM> > Heuristic<NM, CM> for KLookAhead<NM, CM, H> {
     fn new() -> Self {
-       KLookAhead {target: 0, k: 2, final_heuristic: H::new(), visited: HashSet::new(), best_at_time: Date::MAX, best_hop_count: HopCount::MAX, _phantom_cm: PhantomData, _phantom_nm: PhantomData}
+       KLookAhead {target: 0, k: 1, final_heuristic: H::new(), visited: HashSet::new(), best_at_time: Date::MAX, best_hop_count: HopCount::MAX, _phantom_cm: PhantomData, _phantom_nm: PhantomData}
     }
 
-    fn compute_heuristics(&mut self, route_stage: &RouteStage<NM, CM>, bundle: &Bundle, multigraph: &Multigraph<NM, CM>) -> HeuristicResult {
+    fn compute_heuristics(&mut self, route_stage: &RouteStage<NM, CM>, bundle: &Bundle, multigraph: &Multigraph<NM, CM>, visited: &HashSet<NodeID>) -> HeuristicResult {
         // Compute the best heuristic
-        self.compute_for_k(self.k, route_stage, bundle, multigraph);
+        self.compute_for_k(self.k, route_stage, bundle, multigraph, visited);
 
         // Extract the result
         let result: HeuristicResult = HeuristicResult{at_time_heuristic: self.best_at_time, hop_count_heuristic: self.best_hop_count};
@@ -123,6 +125,10 @@ impl <NM: NodeManager +'static, CM: ContactManager +'static, H: Heuristic<NM, CM
         self.best_hop_count = HopCount::MAX;
 
         result
+    }
+    fn compute_delay_heuristic(&mut self, tx_node: NodeID, bundle: &Bundle, multigraph: &Multigraph<NM, CM>, visited: &HashSet<NodeID>) -> HeuristicDelayResult {
+        // not supported right now
+        self.final_heuristic.compute_delay_heuristic(tx_node, bundle, multigraph, visited)
     }
 
     fn setup(&mut self, bundle: &Bundle) {

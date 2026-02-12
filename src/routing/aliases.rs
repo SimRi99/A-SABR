@@ -14,6 +14,7 @@ use crate::{
 };
 use std::{cell::RefCell, rc::Rc};
 use crate::distance::heuristic_sabr::HeuristicSabr;
+use crate::heuristic::k_look_ahead_min::KLookAheadMin;
 #[cfg(feature = "contact_suppression")]
 use super::cgr::Cgr;
 #[cfg(all(feature = "contact_work_area", feature = "contact_suppression"))]
@@ -32,10 +33,31 @@ use crate::pathfinding::node_parenting::NodeParentingPath;
 use crate::types::Duration;
 use super::{spsn::Spsn, Router};
 
-pub type SpsnHybridParentingKLookAheadOwlt<NM, CM> =
-Spsn<NM, CM, HybridParentingTreeExcl<NM, CM, SABR, HeuristicSabr, KLookAhead<NM, CM, Owlt<NM, CM>>>, TreeCache<NM, CM>>;
-pub type SpsnHybridParentingOwlt<NM, CM> =
-    Spsn<NM, CM, HybridParentingTreeExcl<NM, CM, SABR, HeuristicSabr, Owlt<NM, CM>>, TreeCache<NM, CM>>;
+//// ASTAR ALIASES
+pub type VolCgrHybridParentingKLookAheadOwlt<NM, CM> =
+    VolCgr<NM, CM, HybridParentingPathExcl<NM, CM, SABR, HeuristicSabr, KLookAhead<NM, CM, Owlt<NM, CM>>>, RoutingTable<NM, CM, SABR>>;
+
+pub type VolCgrHybridParentingKLookAheadMinOwlt<NM, CM> =
+VolCgr<NM, CM, HybridParentingPathExcl<NM, CM, SABR, HeuristicSabr, KLookAheadMin<NM, CM, Owlt<NM, CM>>>, RoutingTable<NM, CM, SABR>>;
+
+pub type VolCgrHybridParentingOwlt<NM, CM> =
+    VolCgr<NM, CM, HybridParentingPathExcl<NM, CM, SABR, HeuristicSabr, Owlt<NM, CM>>, RoutingTable<NM, CM, SABR>>;
+
+pub type VolCgrNodeParentingOwlt<NM, CM> =
+    VolCgr<NM, CM, NodeParentingPathExcl<NM, CM, SABR, HeuristicSabr, Owlt<NM, CM>>, RoutingTable<NM, CM, SABR>>;
+
+pub type VolCgrNodeParentingKLookAheadOwlt<NM, CM> =
+    VolCgr<NM, CM, NodeParentingPathExcl<NM, CM, SABR, HeuristicSabr, KLookAhead<NM, CM, Owlt<NM, CM>>>, RoutingTable<NM, CM, SABR>>;
+
+#[cfg(feature = "contact_work_area")]
+pub type VolCgrContactParentingOwlt<NM, CM> =
+    VolCgr<NM, CM, ContactParentingPathExcl<NM, CM, SABR, HeuristicSabr, Owlt<NM, CM>>, RoutingTable<NM, CM, SABR>>;
+
+#[cfg(feature = "contact_work_area")]
+pub type VolCgrContactParentingKLookAheadOwlt<NM, CM> =
+    VolCgr<NM, CM, ContactParentingPathExcl<NM, CM, SABR, HeuristicSabr, KLookAhead<NM, CM, Owlt<NM, CM>>>, RoutingTable<NM, CM, SABR>>;
+
+///// NON-ASTAR ALIASES
 pub type SpsnHybridParenting<NM, CM> =
     Spsn<NM, CM, HybridParentingTreeExcl<NM, CM, SABR, SABR, Zero>, TreeCache<NM, CM>>;
 
@@ -189,30 +211,6 @@ pub fn build_generic_router<NM: NodeManager + 'static, CM: ContactManager + 'sta
         let max_entries = options.max_entries;
 
         register_spsn_router!(
-            SpsnHybridParentingKLookAheadOwlt,
-            "SpsnHybridParentingKLookAheadOwlt",
-            router_type,
-            nodes,
-            contacts,
-            distances,
-            check_size,
-            check_priority,
-            max_entries
-        );
-
-        register_spsn_router!(
-            SpsnHybridParentingOwlt,
-            "SpsnHybridParentingOwlt",
-            router_type,
-            nodes,
-            contacts,
-            distances,
-            check_size,
-            check_priority,
-            max_entries
-        );
-
-        register_spsn_router!(
             SpsnNodeParenting,
             "SpsnNodeParenting",
             router_type,
@@ -286,6 +284,71 @@ pub fn build_generic_router<NM: NodeManager + 'static, CM: ContactManager + 'sta
             max_entries
         );
     }
+
+    register_cgr_router!(
+        VolCgrHybridParentingKLookAheadMinOwlt,
+        "VolCgrHybridParentingKLookAheadMinOwlt",
+        router_type,
+        nodes,
+        contacts,
+        distances
+    );
+
+    register_cgr_router!(
+            VolCgrHybridParentingKLookAheadOwlt,
+            "VolCgrHybridParentingKLookAheadOwlt",
+            router_type,
+            nodes,
+            contacts,
+            distances
+    );
+
+    register_cgr_router!(
+            VolCgrHybridParentingOwlt,
+            "VolCgrHybridParentingOwlt",
+            router_type,
+            nodes,
+            contacts,
+            distances
+    );
+
+    register_cgr_router!(
+            VolCgrNodeParentingOwlt,
+            "VolCgrNodeParentingOwlt",
+            router_type,
+            nodes,
+            contacts,
+            distances
+    );
+
+    register_cgr_router!(
+            VolCgrNodeParentingKLookAheadOwlt,
+            "VolCgrNodeParentingKLookAheadOwlt",
+            router_type,
+            nodes,
+            contacts,
+            distances
+    );
+
+    #[cfg(feature = "contact_work_area")]
+    register_cgr_router!(
+            VolCgrContactParentingOwlt,
+            "VolCgrContactParentingOwlt",
+            router_type,
+            nodes,
+            contacts,
+            distances
+    );
+
+    #[cfg(feature = "contact_work_area")]
+    register_cgr_router!(
+            VolCgrContactParentingKLookAheadOwlt,
+            "VolCgrContactParentingKLookAheadOwlt",
+            router_type,
+            nodes,
+            contacts,
+            distances
+    );
 
     register_cgr_router!(
         VolCgrNodeParenting,

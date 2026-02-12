@@ -1,6 +1,7 @@
 pub(crate) mod zero;
 pub(crate) mod owlt;
 pub(crate) mod k_look_ahead;
+pub(crate) mod k_look_ahead_min;
 
 use std::cell::RefCell;
 use std::collections::HashSet;
@@ -10,15 +11,20 @@ use crate::contact_manager::ContactManager;
 use crate::multigraph::Multigraph;
 use crate::node_manager::NodeManager;
 use crate::route_stage::RouteStage;
-use crate::types::{Date, HopCount, NodeID};
+use crate::types::{Date, Duration, HopCount, NodeID};
 
 
-pub struct HeuristicResult{
+pub struct HeuristicResult {
     // A heuristic value for the at_time
     pub at_time_heuristic: Date,
 
     // A heuristic value for the hop count
     pub hop_count_heuristic: HopCount
+}
+
+pub struct HeuristicDelayResult {
+    pub heuristic_delay: Duration,
+    pub heuristic_remaining_hop_count: HopCount
 }
 
 /// A trait for defining heuristic functions.
@@ -55,7 +61,9 @@ pub trait Heuristic<NM: NodeManager, CM: ContactManager> {
     /// # Returns
     ///
     /// * `HeuristicResult` - The results of the heuristic computations.
-    fn compute_heuristics(&mut self, route_stage: &RouteStage<NM, CM>, bundle: &Bundle, multigraph: &Multigraph<NM, CM>) -> HeuristicResult;
+    fn compute_heuristics(&mut self, route_stage: &RouteStage<NM, CM>, bundle: &Bundle, multigraph: &Multigraph<NM, CM>, visited: &HashSet<NodeID>) -> HeuristicResult;
+
+    fn compute_delay_heuristic(&mut self, tx_node: NodeID, bundle: &Bundle, multigraph: &Multigraph<NM, CM>, visited: &HashSet<NodeID>) -> HeuristicDelayResult;
 
     /// Sets up the heuristic with the bundle, as well as a shared visited set, such that certain
     /// heuristics can keep track of which nodes has been traversed already

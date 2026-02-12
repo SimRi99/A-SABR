@@ -6,6 +6,8 @@ import random
 import json
 from typing import Any
 import argparse
+import heapq
+from collections import deque
 
 
 # Represent one contact in the contact graph
@@ -41,6 +43,9 @@ class Coordinates:
     # y-coordinate
     y: int = 0
 
+    # z-coordinate
+    z: int = 0
+
     @staticmethod
     def compute_distance(c1: Coordinates, c2: Coordinates) -> float:
         """
@@ -49,11 +54,11 @@ class Coordinates:
         :param c2: The second coordinate
         :return: The Euclidean distance
         """
-        return sqrt((c2.x - c1.x)**2 + (c2.y - c2.y)**2)
+        return sqrt((c2.x - c1.x)**2 + (c2.y - c2.y)**2 + (c2.z - c2.z)**2)
 
     @staticmethod
     def create_random_coordinate(max_coordinate: int) -> Coordinates:
-        return Coordinates(random.randint(0, max_coordinate), random.randint(0, max_coordinate))
+        return Coordinates(random.randint(0, max_coordinate), random.randint(0, max_coordinate), random.randint(0, max_coordinate))
 
 @dataclass
 class Node:
@@ -85,6 +90,44 @@ class ContactGraph:
 
     # Collect Euclidean distances between all nodes, symmetric dict
     distances: dict[Node, dict[Node, float]] = field(default_factory=dict)
+
+
+    def create_contacts_for_k_nearest_neighbors(self, node_id: int, k: int, max_time: int):
+        """
+        Add contacts with k-nearest neighbors to the graph.
+        :param node_id: The node who should get some contacts.
+        :param k: The number of neighbors to consider for the node.
+        :param max_time: The maximum time to be considered.
+        :return:
+        """
+        def add_contact_until_max_is_reached(tx_node_id: int, rx_node_id: int) -> None:
+            """
+            Add random contact intervals until the max time is reached
+            :param tx_node_id: The transmitting node
+            :param rx_node_id: The receiver node
+            """
+            tx_node: Node = self.nodes[tx_node_id]
+            rx_node: Node = self.nodes[rx_node_id]
+
+            # Randomly add new contacts until the max_time has been reached
+            earliest_time: int = 0
+            while earliest_time < max_time:
+                start: int = random.randint(earliest_time, max_time)
+                distance: int = int(self.distances[tx_node][rx_node]) + 1
+                if start + distance > max_time:
+                    break
+                end: int = random.randint(start + distance, max_time)
+                earliest_time = end + 1 + int(0.2 * max_time)
+
+                # Add contact to contact graph, assume symmetric node
+                # Always the same data rate and confidence
+                contact: Contact = Contact(start, end, tx_node_id, rx_node_id, self.distances[tx_node][rx_node] * 3, 1.0, 100)
+                self.add_contact(tx_node, rx_node, contact)
+
+        for neighbor_id, _ in heapq.nsmallest(k, self.distances[self.nodes[node_id]].items(), key=lambda x: x[1])[1:]:
+            add_contact_until_max_is_reached(node_id, neighbor_id.id)
+
+
 
     def add_distance(self, node_1: Node, node_2: Node) -> None:
         """
@@ -148,17 +191,17 @@ class ContactGraph:
                 rx_node_id: str = str(rx_node)
                 if tx_node_id not in distances_dict:
                     distances_dict[tx_node_id] = dict()
-                distances_dict[tx_node_id][rx_node_id] = self.distances[tx_node][rx_node]
+                distances_dict[tx_node_id][rx_node_id] = self.distances[tx_node][rx_node] * val
 
         return tl_dict
 
 random.seed(42)
 
-def create_graph_and_convert_to_json(number_of_nodes: int, contact_density: float, max_coordinate: int, max_time: int) -> dict:
+def create_graph_and_convert_to_json(number_of_nodes: int, contacts_in_reach: int, max_coordinate: int, max_time: int) -> dict:
     """
     Creates a random contact graph according to the specification.
     :param number_of_nodes: The number of nodes that should be in the graph
-    :param contact_density: The likelihood that a contact between two nodes appears
+    :param contacts_in_reach: How many nodes a contact will be in contact with. A value of x indicates, that only the x closest neighbors will be in contact.
     :param max_coordinate: The limit of what values a coordinate can reach
     :param max_time: The limit of what time contacts can reach
     """
@@ -168,49 +211,28 @@ def create_graph_and_convert_to_json(number_of_nodes: int, contact_density: floa
     for i in range(number_of_nodes):
         contact_graph.nodes.append(Node(i, Coordinates.create_random_coordinate(max_coordinate)))
 
-    # 2. Go through each pair of nodes, compute their distance, and randomly decide whether a contact between
-    # the nodes will happen
+    # 2. Compute distances between each node
     for i in range(number_of_nodes):
         for j in range(i + 1, number_of_nodes):
-            tx_node: Node = contact_graph.nodes[i]
-            rx_node: Node = contact_graph.nodes[j]
-            contact_graph.add_distance(tx_node, rx_node)
+            contact_graph.add_distance(contact_graph.nodes[i], contact_graph.nodes[j])
 
-            # Randomly decide whether contacts will happen between these nodes
-            random_val: float = random.random()
-            if random_val > contact_density:
-                continue
+    # 3. Add the closest neighbors to the contacts
+    for i in range(number_of_nodes):
+        contact_graph.create_contacts_for_k_nearest_neighbors(i, contacts_in_reach, max_coordinate)
 
-            # Randomly add new contacts until the max_time has been reached
-            earliest_time: int = 0
-            while earliest_time < max_time:
-                start: int = random.randint(earliest_time, max_time)
-                distance: int = int(contact_graph.distances[tx_node][rx_node]) + 1
-                if start + distance > max_time:
-                    break
-                end: int = random.randint(start + distance, max_time)
-                earliest_time = end + 1
-
-                # Add contact to contact graph, assume symmetric node
-                # Always the same data rate and confidence
-                contact_1: Contact = Contact(start, end, i, j, contact_graph.distances[tx_node][rx_node], 1.0, 100)
-                contact_2: Contact = Contact(start, end, j, i, contact_graph.distances[tx_node][rx_node], 1.0, 100)
-                contact_graph.add_contact(tx_node, rx_node, contact_1)
-                contact_graph.add_contact(rx_node, tx_node, contact_2)
-
-    # 3. Translate the contact graph into json and print into a file
+    # 4. Translate the contact graph into json and print into a file
     return contact_graph.translate_into_json_dict()
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Create a random contact graph")
-    parser.add_argument("--no-nodes", type=int, default=10, help="Number of nodes in the graph")
-    parser.add_argument("--contact-density", type=float, default=0.1, help="Density between nodes")
-    parser.add_argument("--max-coordinates", type=int, default=100, help="Max coordinate value")
+    parser.add_argument("--no-nodes", type=int, default=100, help="Number of nodes in the graph")
+    parser.add_argument("--contact-density", type=int, default=5, help="Density between nodes")
+    parser.add_argument("--max-coordinates", type=int, default=1000, help="Max coordinate value")
     parser.add_argument("--max-time", type=int, default=1000, help="Max time for contacts")
     parser.add_argument("--filename", type=str, help="File name for the json file")
     args = parser.parse_args()
 
     json_data: dict = create_graph_and_convert_to_json(args.no_nodes, args.contact_density, args.max_coordinates, args.max_time)
     with open(args.filename, "w") as f:
-        json.dump(json_data, f, indent=2)
+        json.dump(json_data, f, indent=1)
