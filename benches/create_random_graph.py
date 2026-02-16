@@ -191,7 +191,7 @@ class ContactGraph:
                 rx_node_id: str = str(rx_node)
                 if tx_node_id not in distances_dict:
                     distances_dict[tx_node_id] = dict()
-                distances_dict[tx_node_id][rx_node_id] = self.distances[tx_node][rx_node] * val
+                distances_dict[tx_node_id][rx_node_id] = self.distances[tx_node][rx_node]
 
         return tl_dict
 

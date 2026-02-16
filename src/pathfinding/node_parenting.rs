@@ -3,6 +3,7 @@ use std::{
     rc::Rc,
 };
 use std::collections::HashSet;
+use std::time::Instant;
 use crate::{
     bundle::Bundle,
     contact_manager::ContactManager,
@@ -125,10 +126,13 @@ macro_rules! define_node_graph {
 
                 priority_queue.push(Reverse(DistanceWrapper::new(Rc::clone(&source_route))));
 
+                let start = Instant::now();
+                let mut i = 0;
                 while let Some(Reverse(DistanceWrapper(from_route, _))) = priority_queue.pop() {
                     if from_route.borrow().is_disabled {
                         continue;
                     }
+                    i += 1;
                     let tx_node_id = from_route.borrow().to_node;
                     if !$is_tree_output {
                         if bundle.destinations[0] == tx_node_id {
@@ -192,6 +196,7 @@ macro_rules! define_node_graph {
                         }
                     }
                 }
+                let end = start.elapsed();
 
                 tree
             }

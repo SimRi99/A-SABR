@@ -19,12 +19,13 @@ pub struct KLookAheadMin<NM: NodeManager, CM: ContactManager, H: Heuristic<NM, C
     _phantom_cm: PhantomData<CM>,
 }
 
-/// Implements the K-Look-Ahead-heuristic. This heuristic will not only evaluate the best possible
+/// Implements the K-Look-Ahead-Min-heuristic. This heuristic will not only evaluate the best possible
 /// node with its owlt heuristic, but also evaluate the lowest costs of all reaching all neighbors
 /// within steps, plus another, final heuristic to reach the target from the neighbor.
-/// By that, the heuristic balances accuracy of the heuristic and computational overhead.
-/// Note that for k=0, the heuristic is equal to the owlt heuristic, and for k=inf, it is equal to
-/// h*.
+/// Unlike the default KLookAhead heuristic, it will not consider the exact costs, but a lower bound
+/// for the costs, independent of the time-varying nature of the graph. By that, it enables reusing
+/// computed results, as well as a more efficient evaluation of the heuristic, at the cost of
+/// heuristic precision.
 
 impl<NM: NodeManager, CM: ContactManager, H: Heuristic<NM, CM>> KLookAheadMin<NM, CM, H> {
     fn compute_for_k(&mut self, k: usize, tx_node: NodeID, bundle: &Bundle, multigraph: &Multigraph<NM, CM>, visited: &HashSet<NodeID>) {

@@ -57,6 +57,16 @@ pub type VolCgrContactParentingOwlt<NM, CM> =
 pub type VolCgrContactParentingKLookAheadOwlt<NM, CM> =
     VolCgr<NM, CM, ContactParentingPathExcl<NM, CM, SABR, HeuristicSabr, KLookAhead<NM, CM, Owlt<NM, CM>>>, RoutingTable<NM, CM, SABR>>;
 
+pub type SpsnHybridParentingOwlt<NM, CM> =
+Spsn<NM, CM, HybridParentingTreeExcl<NM, CM, SABR, HeuristicSabr, Owlt<NM, CM>>, TreeCache<NM, CM>>;
+
+pub type SpsnNodeParentingOwlt<NM, CM> =
+Spsn<NM, CM, NodeParentingTreeExcl<NM, CM, SABR, HeuristicSabr, Owlt<NM, CM>>, TreeCache<NM, CM>>;
+
+#[cfg(feature = "contact_work_area")]
+pub type SpsnContactParentingOwlt<NM, CM> =
+Spsn<NM, CM, ContactParentingTreeExcl<NM, CM, SABR, HeuristicSabr, Owlt<NM, CM>>, TreeCache<NM, CM>>;
+
 ///// NON-ASTAR ALIASES
 pub type SpsnHybridParenting<NM, CM> =
     Spsn<NM, CM, HybridParentingTreeExcl<NM, CM, SABR, SABR, Zero>, TreeCache<NM, CM>>;
@@ -283,6 +293,45 @@ pub fn build_generic_router<NM: NodeManager + 'static, CM: ContactManager + 'sta
             check_priority,
             max_entries
         );
+
+        register_spsn_router!(
+            SpsnHybridParentingOwlt,
+            "SpsnHybridParentingOwlt",
+            router_type,
+            nodes,
+            contacts,
+            distances,
+            check_size,
+            check_priority,
+            max_entries
+        );
+
+        register_spsn_router!(
+            SpsnNodeParentingOwlt,
+            "SpsnNodeParentingOwlt",
+            router_type,
+            nodes,
+            contacts,
+            distances,
+            check_size,
+            check_priority,
+            max_entries
+        );
+
+        #[cfg(feature = "contact_work_area")]
+        register_spsn_router!(
+            SpsnContactParentingOwlt,
+            "SpsnContactParentingOwlt",
+            router_type,
+            nodes,
+            contacts,
+            distances,
+            check_size,
+            check_priority,
+            max_entries
+        );
+
+
     }
 
     register_cgr_router!(

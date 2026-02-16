@@ -391,14 +391,12 @@ macro_rules! define_mpt {
                     }
                 }
                 let end = start.elapsed();
-                println!("Time: {:?}", end);
 
                 // totally fine as we have Rcs
                 for v in &mut tree.by_destination {
                     v.truncate(1);
                 }
 
-                println!("State expansions: {}", i);
                 return tree.to_pathfinding_output();
             }
 

@@ -6,6 +6,7 @@ use std::{
     rc::Rc,
 };
 use std::collections::HashSet;
+use std::time::Instant;
 use crate::{
     bundle::Bundle,
     contact::Contact,
@@ -149,10 +150,13 @@ macro_rules! define_contact_graph {
                 priority_queue.push(Reverse(DistanceWrapper::new(Rc::clone(&source_route))));
                 let visited: Rc<RefCell<HashSet<NodeID>>> = Rc::new(RefCell::new(HashSet::new()));
 
+                let start = Instant::now();
+                let mut i = 0;
                 while let Some(Reverse(DistanceWrapper(from_route, _))) = priority_queue.pop() {
                     if from_route.borrow().is_disabled {
                         continue;
                     }
+                    i += 1;
                     let tx_node_id = from_route.borrow().to_node;
 
                     if !$is_tree_output {
@@ -265,6 +269,7 @@ macro_rules! define_contact_graph {
                         }
                     }
                 }
+                let end = start.elapsed();
 
                 // We replace rather than clear because some work areas became part of the output.
                 for contact in altered_contacts {

@@ -1,6 +1,4 @@
-use std::cell::RefCell;
 use std::collections::HashSet;
-use std::rc::Rc;
 use crate::bundle::Bundle;
 use crate::contact_manager::ContactManager;
 use crate::heuristic::{Heuristic, HeuristicDelayResult, HeuristicResult};

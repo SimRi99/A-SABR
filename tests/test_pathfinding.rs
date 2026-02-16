@@ -9,12 +9,12 @@ use a_sabr::types::NodeID;
 
 #[test]
 fn test_pathfinding_cgr() {
-    let ptvg_filepath = "benches/data.json";
+    let ptvg_filepath = "benches/astar_graphs/2000.json";
 
     let source = 0;
     let bundle = Bundle {
         source,
-        destinations: vec![500],
+        destinations: vec![1890],
         priority: 0,
         size: 0.0,
         expiration: 124060.0,
@@ -34,12 +34,20 @@ fn test_pathfinding_cgr() {
     >(ptvg_filepath)
         .unwrap();
     let duration = start.elapsed();
-    println!("YOOOO: {:?}", duration);
 
     //let router_type= "VolCgrHybridParentingKLookAheadOwlt";
     //let router_type= "VolCgrHybridParentingOwlt";
     //let router_type= "VolCgrHybridParenting";
-    let router_type = "VolCgrHybridParentingKLookAheadMinOwlt";
+    //let router_type = "VolCgrHybridParentingKLookAheadMinOwlt";
+    let router_type = "VolCgrNodeParenting";
+    //let router_type = "VolCgrNodeParentingOwlt";
+    #[cfg(feature = "contact_work_area")]
+    //let router_type = "SpsnContactParentingOwlt";
+    //let router_type = "SpsnContactParenting";
+   // let router_type = "SpsnNodeParentingOwlt";
+    //let router_type = "SpsnNodeParenting";
+    //let router_type = "VolCgrContactParenting";
+    //let router_type = "VolCgrContactParentingOwlt";
     let mut router = build_generic_router(router_type, nodes, contacts, durations, Some(spsn_opts.clone()));
     router.route(
         black_box(source),

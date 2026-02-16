@@ -57,12 +57,26 @@ pub trait Heuristic<NM: NodeManager, CM: ContactManager> {
     ///
     /// * `route_stage` - A reference to the `RouteStage` whose remaining distance has to be measured.
     /// * `bundle` - A reference to the `Bundle` to be routed.
+    /// * `multigraph` - A reference to the `Multigraph` to be used.
+    /// * `visited` - A reference to a set of visited nodes.
     ///
     /// # Returns
     ///
     /// * `HeuristicResult` - The results of the heuristic computations.
     fn compute_heuristics(&mut self, route_stage: &RouteStage<NM, CM>, bundle: &Bundle, multigraph: &Multigraph<NM, CM>, visited: &HashSet<NodeID>) -> HeuristicResult;
 
+    /// Computes a heuristic for the remaining delay that is going to be expected from the transmitting node
+    ///
+    /// # Parameters
+    ///
+    /// * `tx_node` - The `NodeID` of the transmitting node.
+    /// * `bundle` - A reference to the `bundle` to be routed.
+    /// * `multigraph` - A reference to the `Multigraph` to be used.
+    /// * `visited` - A reference to a set of already visited nodes.
+    ///
+    /// # Returns
+    ///
+    /// * `HeuristicDelayResult` - The caused delays.
     fn compute_delay_heuristic(&mut self, tx_node: NodeID, bundle: &Bundle, multigraph: &Multigraph<NM, CM>, visited: &HashSet<NodeID>) -> HeuristicDelayResult;
 
     /// Sets up the heuristic with the bundle, as well as a shared visited set, such that certain
