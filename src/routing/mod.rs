@@ -38,6 +38,7 @@ pub trait Router<NM: NodeManager, CM: ContactManager> {
         bundle: &Bundle,
         curr_time: Date,
         excluded_nodes: &[NodeID],
+        file_path: Option<String>,
     ) -> Option<RoutingOutput<NM, CM>>;
 }
 

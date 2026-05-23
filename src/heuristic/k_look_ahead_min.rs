@@ -6,7 +6,7 @@ use crate::heuristic::{Heuristic, HeuristicDelayResult, HeuristicResult};
 use crate::multigraph::Multigraph;
 use crate::node_manager::NodeManager;
 use crate::route_stage::RouteStage;
-use crate::types::{Duration, HopCount, NodeID};
+use crate::types::{Duration, GeographicalDistance, HopCount, NodeID};
 use crate::bundle::Bundle;
 
 pub struct KLookAheadMin<NM: NodeManager, CM: ContactManager, H: Heuristic<NM, CM>> {
@@ -36,12 +36,12 @@ impl<NM: NodeManager, CM: ContactManager, H: Heuristic<NM, CM>> KLookAheadMin<NM
             return;
         }
         if tx_node == self.target {
-            let heuristic_delay_result: HeuristicDelayResult = HeuristicDelayResult {heuristic_delay: 0.0, heuristic_remaining_hop_count: 0};
+            let heuristic_delay_result: HeuristicDelayResult = HeuristicDelayResult {heuristic_delay: 0.0, heuristic_remaining_hop_count: 0, remaining_distance: 0.0};
             self.add_to_table(tx_node, k, heuristic_delay_result);
             return;
         }
 
-        let mut lowest_delay: HeuristicDelayResult = HeuristicDelayResult {heuristic_delay: Duration::MAX, heuristic_remaining_hop_count: HopCount::MAX};
+        let mut lowest_delay: HeuristicDelayResult = HeuristicDelayResult {heuristic_delay: Duration::MAX, heuristic_remaining_hop_count: HopCount::MAX, remaining_distance: GeographicalDistance::MAX};
 
         self.add_node_to_visited(tx_node);
         let sender =  &multigraph.senders[tx_node as usize];
@@ -120,7 +120,7 @@ impl <NM: NodeManager +'static, CM: ContactManager +'static, H: Heuristic<NM, CM
         let lowest_delay = self.get_from_table(route_stage.to_node, self.k).unwrap();
 
         // Extract the result
-        let result: HeuristicResult = HeuristicResult{at_time_heuristic: route_stage.at_time + lowest_delay.heuristic_delay, hop_count_heuristic: route_stage.hop_count + lowest_delay.heuristic_remaining_hop_count};
+        let result: HeuristicResult = HeuristicResult{at_time_heuristic: route_stage.at_time + lowest_delay.heuristic_delay, hop_count_heuristic: route_stage.hop_count + lowest_delay.heuristic_remaining_hop_count, cumultative_distance_heuristic: route_stage.cumulative_distance + lowest_delay.remaining_distance};
 
         result
     }
@@ -133,7 +133,7 @@ impl <NM: NodeManager +'static, CM: ContactManager +'static, H: Heuristic<NM, CM
 
         let lowest_delay = self.get_from_table(tx_node, self.k).unwrap();
         // Extract the result
-        let result: HeuristicDelayResult = HeuristicDelayResult{heuristic_delay : lowest_delay.heuristic_delay, heuristic_remaining_hop_count: lowest_delay.heuristic_remaining_hop_count};
+        let result: HeuristicDelayResult = HeuristicDelayResult{heuristic_delay : lowest_delay.heuristic_delay, heuristic_remaining_hop_count: lowest_delay.heuristic_remaining_hop_count, remaining_distance: lowest_delay.remaining_distance};
 
         result
     }

@@ -4,7 +4,7 @@
 use crate::bundle::Bundle;
 use crate::contact::ContactInfo;
 use crate::parsing::{DispatchParser, Lexer, Parser, ParsingState};
-use crate::types::{DataRate, Date, Duration, Token, Volume};
+use crate::types::{DataRate, Date, Duration, GeographicalDistance, Token, Volume};
 
 use super::{ContactManager, ContactManagerTxData};
 
@@ -31,6 +31,8 @@ pub struct SegmentationManager {
     rate_intervals: Vec<Segment<DataRate>>,
     /// A list of segments representing delay times associated with different intervals.
     delay_intervals: Vec<Segment<Duration>>,
+    /// A list of segements representing different distances associated with different intervals
+    distance_intervals: Vec<Segment<GeographicalDistance>>,
     #[cfg(feature = "first_depleted")]
     /// The total volume at initialization.
     original_volume: Volume,
@@ -50,6 +52,7 @@ impl SegmentationManager {
     pub fn new(
         rate_intervals: Vec<Segment<DataRate>>,
         delay_intervals: Vec<Segment<Duration>>,
+        distance_intervals : Vec<Segment<GeographicalDistance>>
     ) -> Self {
         let free_intervals = Vec::new();
 
@@ -57,6 +60,7 @@ impl SegmentationManager {
             free_intervals,
             rate_intervals,
             delay_intervals,
+            distance_intervals,
             #[cfg(feature = "first_depleted")]
             original_volume: 0.0,
         }
@@ -81,6 +85,17 @@ impl SegmentationManager {
             return delay_seg.val;
         }
         Duration::MAX
+    }
+
+
+    fn get_distance(tx_end: Date, distance_intervals: &Vec<Segment<GeographicalDistance>>) -> GeographicalDistance {
+        for delay_seg in distance_intervals {
+            if tx_end > delay_seg.end {
+                continue;
+            }
+            return delay_seg.val;
+        }
+        GeographicalDistance::MAX
     }
 
     /// Calculates the transmission end time based on the current time, the volume to be transmitted, and the deadline.
@@ -149,12 +164,14 @@ impl ContactManager for SegmentationManager {
             tx_start = Date::max(free_seg.start, at_time);
             if let Some(tx_end) = self.get_tx_end(tx_start, bundle.size, free_seg.end) {
                 let delay = Self::get_delay(tx_end, &self.delay_intervals);
+                let distance = Self::get_distance(tx_end, &self.distance_intervals);
                 return Some(ContactManagerTxData {
                     tx_start,
                     tx_end,
                     delay,
                     expiration: free_seg.end,
                     arrival: tx_end + delay,
+                    distance,
                 });
             }
         }
@@ -198,6 +215,7 @@ impl ContactManager for SegmentationManager {
         let interval = &mut self.free_intervals[index];
         let expiration = interval.end;
         let delay = Self::get_delay(tx_end, &self.delay_intervals);
+        let distance = Self::get_distance(tx_end, &self.distance_intervals);
 
         if interval.start != tx_start {
             interval.end = tx_start;
@@ -219,6 +237,7 @@ impl ContactManager for SegmentationManager {
             delay,
             expiration,
             arrival: tx_end + delay,
+            distance,
         })
     }
 
@@ -377,6 +396,7 @@ impl Parser<SegmentationManager> for SegmentationManager {
     fn parse(lexer: &mut dyn Lexer) -> ParsingState<SegmentationManager> {
         let mut rate_intervals: Vec<Segment<DataRate>> = Vec::new();
         let mut delay_intervals: Vec<Segment<Duration>> = Vec::new();
+        let mut distance_intervals: Vec<Segment<GeographicalDistance>> = Vec::new();
 
         loop {
             let res = lexer.lookup();
@@ -422,12 +442,31 @@ impl Parser<SegmentationManager> for SegmentationManager {
                             }
                         }
                     }
+                    "distance" => {
+                        lexer.consume_next_token();
+                        let state = parse_interval::<GeographicalDistance>(lexer);
+                        match state {
+                            ParsingState::Finished((start, end, distance)) => {
+                                rate_intervals.push(Segment {
+                                    start,
+                                    end,
+                                    val: distance,
+                                });
+                            }
+                            ParsingState::EOF => {
+                                return ParsingState::EOF;
+                            }
+                            ParsingState::Error(msg) => {
+                                return ParsingState::Error(msg);
+                            }
+                        }
+                    }
                     _ => {
                         break;
                     }
                 },
             }
         }
-        ParsingState::Finished(SegmentationManager::new(rate_intervals, delay_intervals))
+        ParsingState::Finished(SegmentationManager::new(rate_intervals, delay_intervals, distance_intervals))
     }
 }

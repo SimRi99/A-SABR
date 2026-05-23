@@ -11,7 +11,7 @@ use crate::node_manager::NodeManager;
 use crate::route_stage::RouteStage;
 use crate::types::{Date, GeographicalDistance, HopCount, NodeID};
 
-pub struct Owlt<NM: NodeManager, CM: ContactManager>{
+pub struct OwltCurr<NM: NodeManager, CM: ContactManager>{
     target: NodeID,
     _phantom_nm: PhantomData<NM>,
     _phantom_cm: PhantomData<CM>,
@@ -20,9 +20,9 @@ pub struct Owlt<NM: NodeManager, CM: ContactManager>{
 /// Implements the Owlt-heuristic, i.e., the heuristic based on the shortest distance the current
 /// node and the target node. By that, the heuristic will always the return the minimal distance
 /// required to reach the target
-impl <NM: NodeManager + 'static, CM: ContactManager + 'static> Heuristic<NM, CM> for Owlt<NM, CM> {
+impl <NM: NodeManager + 'static, CM: ContactManager + 'static> Heuristic<NM, CM> for OwltCurr<NM, CM> {
     fn new() -> Self {
-        Owlt{ target: 0, _phantom_cm: PhantomData, _phantom_nm: PhantomData }
+        OwltCurr{ target: 0, _phantom_cm: PhantomData, _phantom_nm: PhantomData }
     }
 
     fn compute_heuristics(&mut self, route_stage: &RouteStage<NM, CM>, _bundle: &Bundle, multigraph: &Multigraph<NM, CM>, _visited: &HashSet<NodeID>) -> HeuristicResult {
@@ -35,7 +35,8 @@ impl <NM: NodeManager + 'static, CM: ContactManager + 'static> Heuristic<NM, CM>
             if route_stage.to_node == self.target {0} else {1};
 
         // Owlt does not consider geographical distance, only the delay
-        let cumultative_distance_heuristic: GeographicalDistance = route_stage.cumulative_distance + multigraph.get_minimal_distance_between_sender_and_target(route_stage.to_node, self.target);
+        let start_time = OrderedFloat(route_stage.via.as_ref().unwrap().contact.borrow().info.start.floor());
+        let cumultative_distance_heuristic: GeographicalDistance = route_stage.cumulative_distance + multigraph.get_distance_between_sender_and_target_at_time(route_stage.to_node, self.target, start_time);
         HeuristicResult{ at_time_heuristic, hop_count_heuristic, cumultative_distance_heuristic }
     }
 

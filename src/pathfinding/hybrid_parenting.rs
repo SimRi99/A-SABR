@@ -1,6 +1,9 @@
 use std::{cell::RefCell, cmp::{Ordering, Reverse}, collections::BinaryHeap, marker::PhantomData, rc::Rc, time};
 use std::collections::HashSet;
 use std::time::Instant;
+use std::fs::OpenOptions;
+use std::io::Write;
+use std::any::type_name;
 use crate::{
     bundle::Bundle,
     contact_manager::ContactManager,
@@ -293,6 +296,7 @@ macro_rules! define_mpt {
                 source: NodeID,
                 bundle: &Bundle,
                 excluded_nodes_sorted: &[NodeID],
+                file_path: Option<String>
             ) -> PathFindingOutput<NM, CM> {
                 {
                     let mut graph = self.graph.borrow_mut();
@@ -331,6 +335,7 @@ macro_rules! define_mpt {
 
                 let start = Instant::now();
                 let mut i = 0;
+                let mut resulting_at_time: Date = Date::MIN;
                 while let Some(Reverse(DistanceWrapper(from_route, _))) = priority_queue.pop() {
                     if from_route.borrow().is_disabled {
                         continue;
@@ -342,6 +347,9 @@ macro_rules! define_mpt {
 
                     if !$is_tree_output {
                         if bundle.destinations[0] == tx_node_id {
+                            resulting_at_time = from_route.borrow().at_time;
+                            // println!("Distance: {}", from_route.borrow().cumulative_distance);
+                            // println!("At time: {}", from_route.borrow().at_time);
                             break;
                         }
                     }
@@ -351,7 +359,7 @@ macro_rules! define_mpt {
                         let mut graph = self.graph.borrow_mut();
                         let sender = &mut graph.senders[tx_node_id as usize];
                         for receiver in &mut sender.receivers {
-                            receiver.lazy_prune_and_get_first_idx(from_route.borrow().at_time);
+                            receiver.lazy_prune_and_get_first_idx(current_time);
                         }
                     }
 
@@ -391,6 +399,14 @@ macro_rules! define_mpt {
                     }
                 }
                 let end = start.elapsed();
+                if let Some(filename) = file_path {
+                    let mut file = OpenOptions::new().append(true).create(true).open(filename).unwrap();
+                    let fileoutput = format!("{},{},{}", end.as_micros(), i, resulting_at_time);
+                    writeln!(file, "{}", fileoutput);
+                } else {
+                    println!("{:?}, {}", end.as_micros(), i);
+                }
+
 
                 // totally fine as we have Rcs
                 for v in &mut tree.by_destination {

@@ -10,9 +10,12 @@ use crate::{
     },
     route_storage::{cache::TreeCache, table::RoutingTable},
     routing::volcgr::VolCgr,
-    heuristic::{owlt::Owlt, zero::Zero, k_look_ahead::KLookAhead}
+    heuristic::{owlt::Owlt, zero::Zero, k_look_ahead::KLookAhead, owlt_curr::OwltCurr}
 };
 use std::{cell::RefCell, rc::Rc};
+use std::collections::HashMap;
+use crate::distance::geographical_distance::GeoDistance;
+use crate::distance::heuristic_geographical_distance::HeuristicGeoDistance;
 use crate::distance::heuristic_sabr::HeuristicSabr;
 use crate::heuristic::k_look_ahead_min::KLookAheadMin;
 #[cfg(feature = "contact_suppression")]
@@ -30,7 +33,7 @@ use crate::pathfinding::limiting_contact::first_depleted::FirstDepleted;
 use crate::pathfinding::limiting_contact::first_ending::FirstEnding;
 #[cfg(feature = "contact_suppression")]
 use crate::pathfinding::node_parenting::NodeParentingPath;
-use crate::types::Duration;
+use crate::types::{Duration, GeographicalDistance, NodeID, OrderedDate};
 use super::{spsn::Spsn, Router};
 
 //// ASTAR ALIASES
@@ -42,6 +45,26 @@ VolCgr<NM, CM, HybridParentingPathExcl<NM, CM, SABR, HeuristicSabr, KLookAheadMi
 
 pub type VolCgrHybridParentingOwlt<NM, CM> =
     VolCgr<NM, CM, HybridParentingPathExcl<NM, CM, SABR, HeuristicSabr, Owlt<NM, CM>>, RoutingTable<NM, CM, SABR>>;
+pub type VolCgrHybridParentingHeuristicGeoDistance<NM, CM> =
+VolCgr<NM, CM, HybridParentingPathExcl<NM, CM, GeoDistance, HeuristicGeoDistance, Owlt<NM, CM>>, RoutingTable<NM, CM, SABR>>;
+
+pub type VolCgrNodeParentingHeuristicGeoDistance<NM, CM> =
+VolCgr<NM, CM, NodeParentingPathExcl<NM, CM, GeoDistance, HeuristicGeoDistance, Owlt<NM, CM>>, RoutingTable<NM, CM, SABR>>;
+
+#[cfg(feature = "contact_work_area")]
+pub type VolCgrContactParentingHeuristicGeoDistance<NM, CM> =
+VolCgr<NM, CM, ContactParentingPathExcl<NM, CM, GeoDistance, HeuristicGeoDistance, Owlt<NM, CM>>, RoutingTable<NM, CM, SABR>>;
+
+pub type VolCgrHybridParentingHeuristicCurrentGeoDistance<NM, CM> =
+VolCgr<NM, CM, HybridParentingPathExcl<NM, CM, GeoDistance, HeuristicGeoDistance, OwltCurr<NM, CM>>, RoutingTable<NM, CM, SABR>>;
+
+pub type VolCgrNodeParentingHeuristicCurrentGeoDistance<NM, CM> =
+VolCgr<NM, CM, NodeParentingPathExcl<NM, CM, GeoDistance, HeuristicGeoDistance, OwltCurr<NM, CM>>, RoutingTable<NM, CM, SABR>>;
+
+#[cfg(feature = "contact_work_area")]
+pub type VolCgrContactParentingHeuristicCurrentGeoDistance<NM, CM> =
+VolCgr<NM, CM, ContactParentingPathExcl<NM, CM, GeoDistance, HeuristicGeoDistance, OwltCurr<NM, CM>>, RoutingTable<NM, CM, SABR>>;
+
 
 pub type VolCgrNodeParentingOwlt<NM, CM> =
     VolCgr<NM, CM, NodeParentingPathExcl<NM, CM, SABR, HeuristicSabr, Owlt<NM, CM>>, RoutingTable<NM, CM, SABR>>;
@@ -80,6 +103,15 @@ pub type SpsnContactParenting<NM, CM> =
 
 pub type VolCgrHybridParenting<NM, CM> =
     VolCgr<NM, CM, HybridParentingPathExcl<NM, CM, SABR, SABR, Zero>, RoutingTable<NM, CM, SABR>>;
+
+pub type VolCgrHybridParentingGeoDistance<NM, CM> =
+    VolCgr<NM, CM, HybridParentingPathExcl<NM, CM, GeoDistance, GeoDistance, Zero>, RoutingTable<NM, CM, SABR>>;
+
+pub type VolCgrNodeParentingGeoDistance<NM, CM> =
+VolCgr<NM, CM, NodeParentingPathExcl<NM, CM, GeoDistance, GeoDistance, Zero>, RoutingTable<NM, CM, SABR>>;
+#[cfg(feature = "contact_work_area")]
+pub type VolCgrContactParentingGeoDistance<NM, CM> =
+VolCgr<NM, CM, ContactParentingPathExcl<NM, CM, GeoDistance, GeoDistance, Zero>, RoutingTable<NM, CM, SABR>>;
 
 pub type VolCgrNodeParenting<NM, CM> =
     VolCgr<NM, CM, NodeParentingPathExcl<NM, CM, SABR, SABR, Zero>, RoutingTable<NM, CM, SABR>>;
@@ -173,17 +205,17 @@ pub type CgrFirstDepletedContactParentingHop<NM, CM> = Cgr<
 >;
 
 macro_rules! register_cgr_router {
-    ($router:ident, $router_name:literal, $test_name_variable:ident, $nodes:ident, $contacts:ident, $distances:ident) => {
+    ($router:ident, $router_name:literal, $test_name_variable:ident, $nodes:ident, $contacts:ident, $distances:ident, $distances_per_time:ident, $min_distances:ident) => {
         if $test_name_variable == $router_name {
             let routing_table = Rc::new(RefCell::new(RoutingTable::new()));
 
-            return Box::new($router::<NM, CM>::new($nodes, $contacts, $distances, routing_table));
+            return Box::new($router::<NM, CM>::new($nodes, $contacts, $distances, $distances_per_time, $min_distances, routing_table));
         }
     };
 }
 
 macro_rules! register_spsn_router {
-    ($router:ident, $router_name:literal, $test_name_variable:ident, $nodes:ident, $contacts:ident, $distances:ident, $check_size:ident, $check_priority:ident, $max_entries:ident) => {
+    ($router:ident, $router_name:literal, $test_name_variable:ident, $nodes:ident, $contacts:ident, $distances:ident, $distances_per_time:ident, $min_distances:ident, $check_size:ident, $check_priority:ident, $max_entries:ident) => {
         if $test_name_variable == $router_name {
             let cache = Rc::new(RefCell::new(TreeCache::new(
                 $check_size,
@@ -195,6 +227,8 @@ macro_rules! register_spsn_router {
                 $nodes,
                 $contacts,
                 $distances,
+                $distances_per_time,
+                $min_distances,
                 cache,
                 $check_priority,
             ));
@@ -213,6 +247,8 @@ pub fn build_generic_router<NM: NodeManager + 'static, CM: ContactManager + 'sta
     nodes: Vec<Node<NM>>,
     contacts: Vec<Contact<NM, CM>>,
     distances: Vec<Vec<Duration>>,
+    distances_per_time: Vec<Vec<HashMap<OrderedDate, GeographicalDistance>>>,
+    min_distances: Vec<Vec<GeographicalDistance>>,
     spsn_options: Option<SpsnOptions>,
 ) -> Box<dyn Router<NM, CM>> {
     if let Some(options) = spsn_options {
@@ -227,6 +263,8 @@ pub fn build_generic_router<NM: NodeManager + 'static, CM: ContactManager + 'sta
             nodes,
             contacts,
             distances,
+            distances_per_time,
+            min_distances,
             check_size,
             check_priority,
             max_entries
@@ -239,6 +277,8 @@ pub fn build_generic_router<NM: NodeManager + 'static, CM: ContactManager + 'sta
             nodes,
             contacts,
             distances,
+            distances_per_time,
+            min_distances,
             check_size,
             check_priority,
             max_entries
@@ -251,6 +291,8 @@ pub fn build_generic_router<NM: NodeManager + 'static, CM: ContactManager + 'sta
             nodes,
             contacts,
             distances,
+            distances_per_time,
+            min_distances,
             check_size,
             check_priority,
             max_entries
@@ -263,6 +305,8 @@ pub fn build_generic_router<NM: NodeManager + 'static, CM: ContactManager + 'sta
             nodes,
             contacts,
             distances,
+            distances_per_time,
+            min_distances,
             check_size,
             check_priority,
             max_entries
@@ -276,6 +320,8 @@ pub fn build_generic_router<NM: NodeManager + 'static, CM: ContactManager + 'sta
             nodes,
             contacts,
             distances,
+            distances_per_time,
+            min_distances,
             check_size,
             check_priority,
             max_entries
@@ -289,6 +335,8 @@ pub fn build_generic_router<NM: NodeManager + 'static, CM: ContactManager + 'sta
             nodes,
             contacts,
             distances,
+            distances_per_time,
+            min_distances,
             check_size,
             check_priority,
             max_entries
@@ -301,6 +349,8 @@ pub fn build_generic_router<NM: NodeManager + 'static, CM: ContactManager + 'sta
             nodes,
             contacts,
             distances,
+            distances_per_time,
+            min_distances,
             check_size,
             check_priority,
             max_entries
@@ -313,6 +363,8 @@ pub fn build_generic_router<NM: NodeManager + 'static, CM: ContactManager + 'sta
             nodes,
             contacts,
             distances,
+            distances_per_time,
+            min_distances,
             check_size,
             check_priority,
             max_entries
@@ -326,6 +378,8 @@ pub fn build_generic_router<NM: NodeManager + 'static, CM: ContactManager + 'sta
             nodes,
             contacts,
             distances,
+            distances_per_time,
+            min_distances,
             check_size,
             check_priority,
             max_entries
@@ -340,63 +394,145 @@ pub fn build_generic_router<NM: NodeManager + 'static, CM: ContactManager + 'sta
         router_type,
         nodes,
         contacts,
-        distances
+        distances,
+        distances_per_time,
+        min_distances
     );
 
     register_cgr_router!(
-            VolCgrHybridParentingKLookAheadOwlt,
-            "VolCgrHybridParentingKLookAheadOwlt",
-            router_type,
-            nodes,
-            contacts,
-            distances
+        VolCgrHybridParentingKLookAheadOwlt,
+        "VolCgrHybridParentingKLookAheadOwlt",
+        router_type,
+        nodes,
+        contacts,
+        distances,
+        distances_per_time,
+        min_distances
     );
 
     register_cgr_router!(
-            VolCgrHybridParentingOwlt,
-            "VolCgrHybridParentingOwlt",
-            router_type,
-            nodes,
-            contacts,
-            distances
+        VolCgrHybridParentingOwlt,
+        "VolCgrHybridParentingOwlt",
+        router_type,
+        nodes,
+        contacts,
+        distances,
+        distances_per_time,
+        min_distances
     );
 
     register_cgr_router!(
-            VolCgrNodeParentingOwlt,
-            "VolCgrNodeParentingOwlt",
-            router_type,
-            nodes,
-            contacts,
-            distances
-    );
-
-    register_cgr_router!(
-            VolCgrNodeParentingKLookAheadOwlt,
-            "VolCgrNodeParentingKLookAheadOwlt",
-            router_type,
-            nodes,
-            contacts,
-            distances
-    );
-
-    #[cfg(feature = "contact_work_area")]
-    register_cgr_router!(
-            VolCgrContactParentingOwlt,
-            "VolCgrContactParentingOwlt",
-            router_type,
-            nodes,
-            contacts,
-            distances
+        VolCgrHybridParentingHeuristicGeoDistance,
+        "VolCgrHybridParentingHeuristicGeoDistance",
+        router_type,
+        nodes,
+        contacts,
+        distances,
+        distances_per_time,
+        min_distances
     );
 
     #[cfg(feature = "contact_work_area")]
     register_cgr_router!(
-            VolCgrContactParentingKLookAheadOwlt,
-            "VolCgrContactParentingKLookAheadOwlt",
-            router_type,
-            nodes,
-            contacts,
-            distances
+        VolCgrContactParentingHeuristicGeoDistance,
+        "VolCgrContactParentingHeuristicGeoDistance",
+        router_type,
+        nodes,
+        contacts,
+        distances,
+        distances_per_time,
+        min_distances
+    );
+
+    register_cgr_router!(
+        VolCgrNodeParentingHeuristicGeoDistance,
+        "VolCgrNodeParentingHeuristicGeoDistance",
+        router_type,
+        nodes,
+        contacts,
+        distances,
+        distances_per_time,
+        min_distances
+    );
+
+    register_cgr_router!(
+        VolCgrHybridParentingHeuristicCurrentGeoDistance,
+        "VolCgrHybridParentingHeuristicCurrentGeoDistance",
+        router_type,
+        nodes,
+        contacts,
+        distances,
+        distances_per_time,
+        min_distances
+    );
+
+    #[cfg(feature = "contact_work_area")]
+    register_cgr_router!(
+        VolCgrContactParentingHeuristicCurrentGeoDistance,
+        "VolCgrContactParentingHeuristicCurrentGeoDistance",
+        router_type,
+        nodes,
+        contacts,
+        distances,
+        distances_per_time,
+        min_distances
+    );
+
+    register_cgr_router!(
+        VolCgrNodeParentingHeuristicCurrentGeoDistance,
+        "VolCgrNodeParentingHeuristicCurrentGeoDistance",
+        router_type,
+        nodes,
+        contacts,
+        distances,
+        distances_per_time,
+        min_distances
+    );
+
+    register_cgr_router!(
+        VolCgrNodeParentingOwlt,
+        "VolCgrNodeParentingOwlt",
+        router_type,
+        nodes,
+        contacts,
+        distances,
+        distances_per_time,
+        min_distances
+    );
+
+    register_cgr_router!(
+        VolCgrNodeParentingKLookAheadOwlt,
+        "VolCgrNodeParentingKLookAheadOwlt",
+        router_type,
+        nodes,
+        contacts,
+        distances,
+        distances_per_time,
+        min_distances
+    );
+
+    #[cfg(feature = "contact_work_area")]
+    register_cgr_router!(
+        VolCgrContactParentingOwlt,
+        "VolCgrContactParentingOwlt",
+        router_type,
+        nodes,
+        contacts,
+        distances,
+        distances_per_time,
+        min_distances
+    );
+
+    #[cfg(feature = "contact_work_area")]
+    register_cgr_router!(
+        VolCgrContactParentingKLookAheadOwlt,
+        "VolCgrContactParentingKLookAheadOwlt",
+        router_type,
+        nodes,
+        contacts,
+        distances,
+        distances_per_time,
+        min_distances
     );
 
     register_cgr_router!(
@@ -405,7 +541,20 @@ pub fn build_generic_router<NM: NodeManager + 'static, CM: ContactManager + 'sta
         router_type,
         nodes,
         contacts,
-        distances
+        distances,
+        distances_per_time,
+        min_distances
+    );
+
+    register_cgr_router!(
+        VolCgrNodeParentingGeoDistance,
+        "VolCgrNodeParentingGeoDistance",
+        router_type,
+        nodes,
+        contacts,
+        distances,
+        distances_per_time,
+        min_distances
     );
 
     register_cgr_router!(
@@ -414,7 +563,20 @@ pub fn build_generic_router<NM: NodeManager + 'static, CM: ContactManager + 'sta
         router_type,
         nodes,
         contacts,
-        distances
+        distances,
+        distances_per_time,
+        min_distances
+    );
+
+    register_cgr_router!(
+        VolCgrHybridParentingGeoDistance,
+        "VolCgrHybridParentingGeoDistance",
+        router_type,
+        nodes,
+        contacts,
+        distances,
+        distances_per_time,
+        min_distances
     );
 
     register_cgr_router!(
@@ -423,7 +585,9 @@ pub fn build_generic_router<NM: NodeManager + 'static, CM: ContactManager + 'sta
         router_type,
         nodes,
         contacts,
-        distances
+        distances,
+        distances_per_time,
+        min_distances
     );
 
     register_cgr_router!(
@@ -432,7 +596,9 @@ pub fn build_generic_router<NM: NodeManager + 'static, CM: ContactManager + 'sta
         router_type,
         nodes,
         contacts,
-        distances
+        distances,
+        distances_per_time,
+        min_distances
     );
 
     #[cfg(feature = "contact_work_area")]
@@ -442,7 +608,21 @@ pub fn build_generic_router<NM: NodeManager + 'static, CM: ContactManager + 'sta
         router_type,
         nodes,
         contacts,
-        distances
+        distances,
+        distances_per_time,
+        min_distances
+    );
+
+    #[cfg(feature = "contact_work_area")]
+    register_cgr_router!(
+        VolCgrContactParentingGeoDistance,
+        "VolCgrContactParentingGeoDistance",
+        router_type,
+        nodes,
+        contacts,
+        distances,
+        distances_per_time,
+        min_distances
     );
 
     #[cfg(feature = "contact_work_area")]
@@ -452,7 +632,9 @@ pub fn build_generic_router<NM: NodeManager + 'static, CM: ContactManager + 'sta
         router_type,
         nodes,
         contacts,
-        distances
+        distances,
+        distances_per_time,
+        min_distances
     );
 
     #[cfg(feature = "contact_suppression")]
@@ -462,7 +644,9 @@ pub fn build_generic_router<NM: NodeManager + 'static, CM: ContactManager + 'sta
         router_type,
         nodes,
         contacts,
-        distances
+        distances,
+        distances_per_time,
+        min_distances
     );
 
     #[cfg(feature = "contact_suppression")]
@@ -472,7 +656,9 @@ pub fn build_generic_router<NM: NodeManager + 'static, CM: ContactManager + 'sta
         router_type,
         nodes,
         contacts,
-        distances
+        distances,
+        distances_per_time,
+        min_distances
     );
 
     #[cfg(feature = "contact_suppression")]
@@ -482,7 +668,9 @@ pub fn build_generic_router<NM: NodeManager + 'static, CM: ContactManager + 'sta
         router_type,
         nodes,
         contacts,
-        distances
+        distances,
+        distances_per_time,
+        min_distances
     );
 
     #[cfg(feature = "contact_suppression")]
@@ -492,7 +680,9 @@ pub fn build_generic_router<NM: NodeManager + 'static, CM: ContactManager + 'sta
         router_type,
         nodes,
         contacts,
-        distances
+        distances,
+        distances_per_time,
+        min_distances
     );
 
     #[cfg(all(feature = "contact_work_area", feature = "contact_suppression"))]
@@ -502,7 +692,9 @@ pub fn build_generic_router<NM: NodeManager + 'static, CM: ContactManager + 'sta
         router_type,
         nodes,
         contacts,
-        distances
+        distances,
+        distances_per_time,
+        min_distances
     );
 
     #[cfg(all(feature = "contact_work_area", feature = "contact_suppression"))]
@@ -512,7 +704,9 @@ pub fn build_generic_router<NM: NodeManager + 'static, CM: ContactManager + 'sta
         router_type,
         nodes,
         contacts,
-        distances
+        distances,
+        distances_per_time,
+        min_distances
     );
 
     #[cfg(all(feature = "contact_suppression", feature = "first_depleted"))]
@@ -522,7 +716,9 @@ pub fn build_generic_router<NM: NodeManager + 'static, CM: ContactManager + 'sta
         router_type,
         nodes,
         contacts,
-        distances
+        distances,
+        distances_per_time,
+        min_distances
     );
 
     #[cfg(all(feature = "contact_suppression", feature = "first_depleted"))]
@@ -532,7 +728,9 @@ pub fn build_generic_router<NM: NodeManager + 'static, CM: ContactManager + 'sta
         router_type,
         nodes,
         contacts,
-        distances
+        distances,
+        distances_per_time,
+        min_distances
     );
 
     #[cfg(all(feature = "contact_suppression", feature = "first_depleted"))]
@@ -542,7 +740,9 @@ pub fn build_generic_router<NM: NodeManager + 'static, CM: ContactManager + 'sta
         router_type,
         nodes,
         contacts,
-        distances
+        distances,
+        distances_per_time,
+        min_distances
     );
 
     #[cfg(all(feature = "contact_suppression", feature = "first_depleted"))]
@@ -552,7 +752,9 @@ pub fn build_generic_router<NM: NodeManager + 'static, CM: ContactManager + 'sta
         router_type,
         nodes,
         contacts,
-        distances
+        distances,
+        distances_per_time,
+        min_distances
     );
 
     #[cfg(all(
@@ -566,7 +768,9 @@ pub fn build_generic_router<NM: NodeManager + 'static, CM: ContactManager + 'sta
         router_type,
         nodes,
         contacts,
-        distances
+        distances,
+        distances_per_time,
+        min_distances
     );
 
     #[cfg(all(
@@ -580,7 +784,9 @@ pub fn build_generic_router<NM: NodeManager + 'static, CM: ContactManager + 'sta
         router_type,
         nodes,
         contacts,
-        distances
+        distances,
+        distances_per_time,
+        min_distances
     );
 
     panic!(

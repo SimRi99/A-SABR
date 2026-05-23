@@ -1,4 +1,6 @@
 use std::cell::RefCell;
+use std::collections::HashMap;
+use std::iter::Map;
 use std::rc::Rc;
 
 use super::node::Node;
@@ -111,6 +113,11 @@ pub struct Multigraph<NM: NodeManager, CM: ContactManager> {
     /// * `min_delay_between_nodes` - A matrix storing for each node pair the minimal delay to each
     /// other as if they were connected. This information is used for A*-heuristics
     pub min_delay_between_nodes: Vec<Vec<Duration>>,
+    /// * `distance_per_time` - A map storing information about the individual distances between
+    /// all node pairs at a given time. Currently, a distance is only stored for contact starts
+    /// and is assumed to the constant until the contact ends
+    pub distance_per_time: Vec<Vec<HashMap<OrderedDate, GeographicalDistance>>>,
+    pub min_distances: Vec<Vec<GeographicalDistance>>,
     /// * `node_count` - The total number of nodes in the multigraph.
     node_count: usize,
 }
@@ -132,7 +139,7 @@ impl<NM: NodeManager, CM: ContactManager> Multigraph<NM, CM> {
     /// # Returns
     ///
     /// * `Self` - A new instance of `Multigraph`.
-    pub fn new(mut nodes: Vec<Node<NM>>, mut contact_plan: Vec<Contact<NM, CM>>, distances: Vec<Vec<Duration>>) -> Self {
+    pub fn new(mut nodes: Vec<Node<NM>>, mut contact_plan: Vec<Contact<NM, CM>>, distances: Vec<Vec<Duration>>, distance_per_time: Vec<Vec<HashMap<OrderedDate, GeographicalDistance>>>, min_distances: Vec<Vec<GeographicalDistance>>) -> Self {
         // the contact plan might not be sorted
         // having a sorted list of contacts allow easy multigraph creation
         let node_count = nodes.len();
@@ -192,6 +199,8 @@ impl<NM: NodeManager, CM: ContactManager> Multigraph<NM, CM> {
             senders,
             nodes: all_refs,
             min_delay_between_nodes: distances,
+            distance_per_time,
+            min_distances,
             node_count,
         }
     }
@@ -233,5 +242,13 @@ impl<NM: NodeManager, CM: ContactManager> Multigraph<NM, CM> {
     /// * `Duration` - The minimal delay between two nodes
     pub fn get_minimal_delay_between_sender_and_target(&self, sender: NodeID, target: NodeID) -> Duration {
         self.min_delay_between_nodes[sender as usize][target as usize]
+    }
+
+    pub fn get_distance_between_sender_and_target_at_time(&self, sender: NodeID, target: NodeID, at: OrderedDate) -> GeographicalDistance {
+        self.distance_per_time[sender as usize][target as usize][&at]
+    }
+
+    pub fn get_minimal_distance_between_sender_and_target(&self, sender: NodeID, target: NodeID) -> GeographicalDistance {
+        self.min_distances[sender as usize][target as usize]
     }
 }

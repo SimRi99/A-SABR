@@ -2,6 +2,8 @@ use std::{
     cell::RefCell, cmp::Ordering, cmp::Reverse, collections::BinaryHeap, marker::PhantomData,
     rc::Rc,
 };
+use std::fs::OpenOptions;
+use std::io::Write;
 use std::collections::HashSet;
 use std::time::Instant;
 use crate::{
@@ -82,7 +84,8 @@ macro_rules! define_node_graph {
                 current_time: Date,
                 source: NodeID,
                 bundle: &Bundle,
-                excluded_nodes_sorted: &[NodeID]
+                excluded_nodes_sorted: &[NodeID],
+                file_path: Option<String>,
             ) -> PathFindingOutput<NM, CM> {
                 {
                     let mut graph = self.graph.borrow_mut();
@@ -115,6 +118,7 @@ macro_rules! define_node_graph {
                     BinaryHeap::new();
 
                 let visited: Rc<RefCell<HashSet<NodeID>>> = Rc::new(RefCell::new(HashSet::new()));
+                let mut resulting_at_time: Date = Date::MIN;
 
                 for node_id in 0..self.graph.borrow().get_node_count() {
                     if node_id == source as usize {
@@ -136,6 +140,7 @@ macro_rules! define_node_graph {
                     let tx_node_id = from_route.borrow().to_node;
                     if !$is_tree_output {
                         if bundle.destinations[0] == tx_node_id {
+                            resulting_at_time = from_route.borrow().at_time;
                             break;
                         }
                     }
@@ -145,7 +150,7 @@ macro_rules! define_node_graph {
                         let mut graph = self.graph.borrow_mut();
                         let sender = &mut graph.senders[tx_node_id as usize];
                         for receiver in &mut sender.receivers {
-                            receiver.lazy_prune_and_get_first_idx(from_route.borrow().at_time);
+                            receiver.lazy_prune_and_get_first_idx(current_time);
                         }
                     }
 
@@ -197,7 +202,13 @@ macro_rules! define_node_graph {
                     }
                 }
                 let end = start.elapsed();
-
+                if let Some(filename) = file_path {
+                    let mut file = OpenOptions::new().append(true).create(true).open(filename).unwrap();
+                    let fileoutput = format!("{},{},{}", end.as_micros(), i, resulting_at_time);
+                    writeln!(file, "{}", fileoutput);
+                } else {
+                    println!("{:?}, {}", end.as_micros(), i);
+                }
                 tree
             }
 

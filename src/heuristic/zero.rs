@@ -17,11 +17,11 @@ impl <NM: NodeManager, CM: ContactManager> Heuristic<NM, CM> for Zero {
     }
 
     fn compute_heuristics(&mut self, route_stage: &RouteStage<NM, CM>, _bundle: &Bundle, _multigraph: &Multigraph<NM, CM>, _visited: &HashSet<NodeID>) -> HeuristicResult {
-        HeuristicResult{ at_time_heuristic: route_stage.at_time, hop_count_heuristic: route_stage.hop_count }
+        HeuristicResult{ at_time_heuristic: route_stage.at_time, hop_count_heuristic: route_stage.hop_count, cumultative_distance_heuristic: route_stage.cumulative_distance }
     }
 
     fn compute_delay_heuristic(&mut self, _tx_node: NodeID, _bundle: &Bundle, _multigraph: &Multigraph<NM, CM>, _visited: &HashSet<NodeID>) -> HeuristicDelayResult {
-        HeuristicDelayResult{ heuristic_delay: 0.0, heuristic_remaining_hop_count: 0 }
+        HeuristicDelayResult{ heuristic_delay: 0.0, heuristic_remaining_hop_count: 0, remaining_distance: 0.0 }
     }
 
     fn setup(&mut self, _bundle: &Bundle) {

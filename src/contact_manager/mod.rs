@@ -5,6 +5,7 @@ use crate::{
     contact::ContactInfo,
     types::{Date, Duration},
 };
+use crate::types::GeographicalDistance;
 
 pub mod legacy;
 pub mod seg;
@@ -21,6 +22,8 @@ pub struct ContactManagerTxData {
     pub expiration: Date,
     /// The last bit arrival time (tx_end + delay).
     pub arrival: Date,
+    /// The geographical distance between both nodes
+    pub distance: GeographicalDistance
 }
 
 macro_rules! define_contact_manager {

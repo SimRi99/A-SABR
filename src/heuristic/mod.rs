@@ -2,6 +2,7 @@ pub(crate) mod zero;
 pub(crate) mod owlt;
 pub(crate) mod k_look_ahead;
 pub(crate) mod k_look_ahead_min;
+pub(crate) mod owlt_curr;
 
 use std::cell::RefCell;
 use std::collections::HashSet;
@@ -11,7 +12,7 @@ use crate::contact_manager::ContactManager;
 use crate::multigraph::Multigraph;
 use crate::node_manager::NodeManager;
 use crate::route_stage::RouteStage;
-use crate::types::{Date, Duration, HopCount, NodeID};
+use crate::types::{Date, Duration, GeographicalDistance, HopCount, NodeID};
 
 
 pub struct HeuristicResult {
@@ -19,12 +20,16 @@ pub struct HeuristicResult {
     pub at_time_heuristic: Date,
 
     // A heuristic value for the hop count
-    pub hop_count_heuristic: HopCount
+    pub hop_count_heuristic: HopCount,
+
+    // A heuristic value for the remaining distance
+    pub cumultative_distance_heuristic: GeographicalDistance
 }
 
 pub struct HeuristicDelayResult {
     pub heuristic_delay: Duration,
-    pub heuristic_remaining_hop_count: HopCount
+    pub heuristic_remaining_hop_count: HopCount,
+    pub remaining_distance: GeographicalDistance
 }
 
 /// A trait for defining heuristic functions.

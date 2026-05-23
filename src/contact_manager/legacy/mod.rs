@@ -314,6 +314,7 @@ macro_rules! generate_prio_volume_manager {
                     delay: self.delay,
                     expiration: contact_data.end,
                     arrival: self.delay + tx_end,
+                    distance: 0.0
                 })
             }
 

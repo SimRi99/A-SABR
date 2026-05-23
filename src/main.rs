@@ -1,5 +1,5 @@
 use std::{cell::RefCell, env, rc::Rc};
-
+use std::collections::HashMap;
 use a_sabr::{
     bundle::Bundle,
     contact_manager::{
@@ -47,7 +47,7 @@ fn main() {
     let table = Rc::new(RefCell::new(TreeCache::new(true, false, 10)));
     // We initialize the routing algorithm with the storage and the contacts/nodes created thanks to the parser
     let mut spsn = SpsnHybridParenting::<NoManagement, Box<dyn ContactManager>>::new(
-        nodes, contacts, vec![], table, false,
+        nodes, contacts, vec![], vec![], vec![], table, false,
     );
 
     // We will route a bundle
@@ -60,7 +60,7 @@ fn main() {
     };
 
     // We schedule the bundle (resource updates were conducted)
-    let out = spsn.route(0, &b, 0.0, &Vec::new());
+    let out = spsn.route(0, &b, 0.0, &Vec::new(), None);
 
     if let Some(out) = out {
         for (_contact, dest_routes) in out.first_hops.values() {

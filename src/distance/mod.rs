@@ -7,6 +7,8 @@ use crate::{contact_manager::ContactManager, route_stage::RouteStage};
 pub mod hop;
 pub mod sabr;
 pub mod heuristic_sabr;
+pub mod geographical_distance;
+pub mod heuristic_geographical_distance;
 
 /// A trait that allows RouteStages to define custom distance comparison strategies.
 ///

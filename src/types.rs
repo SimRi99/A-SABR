@@ -1,4 +1,5 @@
 use std::str::FromStr;
+use ordered_float::OrderedFloat;
 
 use crate::parsing::{Lexer, ParsingState};
 
@@ -17,6 +18,9 @@ pub type Duration = f64;
 /// Represents a date (could represent days since a specific epoch).
 pub type Date = f64;
 
+/// Represents an ordered date (used for some hash maps)
+pub type OrderedDate = OrderedFloat<f64>;
+
 /// Represents the priority of a task or node.
 pub type Priority = u8;
 
@@ -28,6 +32,9 @@ pub type DataRate = f64;
 
 /// Represents the count of hops in a routing path.
 pub type HopCount = u16;
+
+/// Represents the distance between two nodes
+pub type GeographicalDistance = f64;
 
 /// A trait for types that can be parsed from a lexer.
 ///

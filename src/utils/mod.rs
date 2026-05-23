@@ -1,5 +1,5 @@
 use std::{cell::RefCell, rc::Rc};
-
+use std::collections::HashMap;
 use crate::{
     contact_manager::ContactManager,
     contact_plan::{asabr_file_lexer::FileLexer, from_asabr_lexer::ASABRContactPlan},
@@ -27,6 +27,8 @@ pub fn init_pathfinding<
     P::new(Rc::new(RefCell::new(Multigraph::new(
         nodes_n_contacts.0,
         nodes_n_contacts.1,
+        vec![],
+        vec![],
         vec![]
     ))))
 }

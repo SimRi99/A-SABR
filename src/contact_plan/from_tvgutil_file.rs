@@ -18,6 +18,9 @@ use std::{collections::HashMap, io};
 
 use serde_json::Value;
 use std::fs;
+use std::iter::Map;
+use ordered_float::{Float, FloatCore, OrderedFloat};
+use crate::types::{GeographicalDistance, OrderedDate};
 
 #[cfg_attr(feature = "debug", derive(Debug))]
 pub struct TVGUtilContactData {
@@ -27,6 +30,7 @@ pub struct TVGUtilContactData {
     rx_node: NodeID,
     delay: Duration,
     data_rate: DataRate,
+    distance: GeographicalDistance,
     _confidence: f32,
 }
 
@@ -71,6 +75,11 @@ impl FromTVGUtilContactData<NoManagement, SegmentationManager> for SegmentationM
                 end: data.tx_end,
                 val: data.delay,
             }],
+            vec![Segment::<Duration> {
+                start: data.tx_start,
+                end: data.tx_end,
+                val: data.distance,
+            }]
         );
         Contact::try_new(contact_info, manager)
     }
@@ -80,8 +89,8 @@ pub struct TVGUtilContactPlan {}
 
 impl TVGUtilContactPlan {
     pub fn parse<NM: NodeManager, CM: FromTVGUtilContactData<NM, CM> + ContactManager>(
-        filename: &str,
-    ) -> io::Result<(Vec<Node<NoManagement>>, Vec<Contact<NM, CM>>, Vec<Vec<Duration>>)> {
+        filename: &str, distance_modifier: f64
+    ) -> io::Result<(Vec<Node<NoManagement>>, Vec<Contact<NM, CM>>, Vec<Vec<Duration>>, Vec<Vec<HashMap<OrderedDate, GeographicalDistance>>>, Vec<Vec<GeographicalDistance>>)> {
         let mut nodes: Vec<Node<NoManagement>> = Vec::new();
         let mut contacts: Vec<Contact<NM, CM>> = Vec::new();
 
@@ -124,6 +133,10 @@ impl TVGUtilContactPlan {
                 let fourth_level_array = third_level_array[0].as_array().unwrap();
                 let data_rate = fourth_level_array[1].as_f64().unwrap() as DataRate;
                 let delay = fourth_level_array[2].as_f64().unwrap() as Duration;
+                let mut distance = 0.0;
+                if fourth_level_array.len() > 3 {
+                    distance = fourth_level_array[3].as_f64().unwrap() as GeographicalDistance;
+                }
 
                 let tvgcontact = TVGUtilContactData {
                     tx_start: start,
@@ -132,6 +145,7 @@ impl TVGUtilContactPlan {
                     rx_node: *rx_node,
                     delay,
                     data_rate,
+                    distance,
                     _confidence: confidence,
                 };
 
@@ -150,11 +164,46 @@ impl TVGUtilContactPlan {
                     for (rx_node, distance) in tx_map {
                         let tx_node_id: NodeID = *map_id_map.get(&tx_node as &str).unwrap();
                         let rx_node_id: NodeID = *map_id_map.get(&rx_node as &str).unwrap();
-                        distances[tx_node_id as usize][rx_node_id as usize] = distance.as_f64().unwrap()
+                        distances[tx_node_id as usize][rx_node_id as usize] = distance.as_f64().unwrap() * distance_modifier
                     }
                 }
             }
         }
-        Ok((nodes, contacts, distances))
+
+        // Create the distances that are different per time
+        let mut distances_per_time: Vec<Vec<HashMap<OrderedDate, GeographicalDistance>>> = vec![vec![HashMap::new(); nodes.len()]; nodes.len()];
+        if let Some(distances_block) = parsed.get("distances_per_time") {
+            let distances_nodes = distances_block.as_object().unwrap();
+            for (tx_node, rx_dict_opt) in distances_nodes {
+                if let Some(rx_dict) = rx_dict_opt.as_object() {
+                    for (rx_node, time_dict_opt) in rx_dict {
+                        if let Some(time_dict) = time_dict_opt.as_object() {
+                            for (time, distance) in time_dict {
+                                let tx_node_id: NodeID = *map_id_map.get(&tx_node as &str).unwrap();
+                                let rx_node_id: NodeID = *map_id_map.get(&rx_node as &str).unwrap();
+                                let time: OrderedDate = OrderedFloat(time.parse::<f64>().unwrap().floor());
+                                let distance: GeographicalDistance = distance.as_f64().unwrap();
+
+                                distances_per_time[tx_node_id as usize][rx_node_id as usize].insert(time, distance);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        let mut min_distances: Vec<Vec<GeographicalDistance>> = vec![vec![0.0; nodes.len()]; nodes.len()];
+        if let Some(distances_block) = parsed.get("min_distances") {
+            let distances_nodes = distances_block.as_object().unwrap();
+            for (tx_node, tx_dict) in distances_nodes {
+                if let Some(tx_map) = tx_dict.as_object() {
+                    for (rx_node, distance) in tx_map {
+                        let tx_node_id: NodeID = *map_id_map.get(&tx_node as &str).unwrap();
+                        let rx_node_id: NodeID = *map_id_map.get(&rx_node as &str).unwrap();
+                        min_distances[tx_node_id as usize][rx_node_id as usize] = distance.as_f64().unwrap();
+                    }
+                }
+            }
+        }
+        Ok((nodes, contacts, distances, distances_per_time, min_distances))
     }
 }

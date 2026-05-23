@@ -11,7 +11,8 @@ use crate::{
 };
 
 use std::{cell::RefCell, marker::PhantomData, rc::Rc};
-use crate::types::Duration;
+use std::collections::HashMap;
+use crate::types::{Duration, GeographicalDistance, OrderedDate};
 use super::{schedule_multicast, schedule_unicast, Router, RoutingOutput};
 
 /// A structure representing the Shortest Path with Safety Nodes (SPSN) algorithm.
@@ -53,13 +54,14 @@ impl<NM: NodeManager, CM: ContactManager, P: Pathfinding<NM, CM>, S: TreeStorage
         bundle: &Bundle,
         curr_time: Date,
         excluded_nodes: &[NodeID],
+        file_path: Option<String>
     ) -> Option<RoutingOutput<NM, CM>> {
         if bundle.expiration < curr_time {
             return None;
         }
 
         if bundle.destinations.len() == 1 {
-            return self.route_unicast(source, bundle, curr_time, excluded_nodes);
+            return self.route_unicast(source, bundle, curr_time, excluded_nodes, file_path);
         }
 
         self.route_multicast(source, bundle, curr_time, excluded_nodes)
@@ -85,11 +87,13 @@ impl<S: TreeStorage<NM, CM>, NM: NodeManager, CM: ContactManager, P: Pathfinding
         nodes: Vec<Node<NM>>,
         contacts: Vec<Contact<NM, CM>>,
         distances: Vec<Vec<Duration>>,
+        distances_per_time: Vec<Vec<HashMap<OrderedDate, GeographicalDistance>>>,
+        min_distances: Vec<Vec<GeographicalDistance>>,
         route_storage: Rc<RefCell<S>>,
         with_priorities: bool,
     ) -> Self {
         Self {
-            pathfinding: P::new(Rc::new(RefCell::new(Multigraph::new(nodes, contacts, distances)))),
+            pathfinding: P::new(Rc::new(RefCell::new(Multigraph::new(nodes, contacts, distances, distances_per_time, min_distances)))),
             route_storage: route_storage.clone(),
             unicast_guard: Guard::new(with_priorities),
             // for compilation
@@ -120,6 +124,7 @@ impl<S: TreeStorage<NM, CM>, NM: NodeManager, CM: ContactManager, P: Pathfinding
         bundle: &Bundle,
         curr_time: Date,
         excluded_nodes: &[NodeID],
+        file_path: Option<String>,
     ) -> Option<RoutingOutput<NM, CM>> {
         if self.unicast_guard.must_abort(bundle) {
             return None;
@@ -138,7 +143,7 @@ impl<S: TreeStorage<NM, CM>, NM: NodeManager, CM: ContactManager, P: Pathfinding
 
         let new_tree = self
             .pathfinding
-            .get_next(curr_time, source, bundle, excluded_nodes);
+            .get_next(curr_time, source, bundle, excluded_nodes, file_path);
         let tree_ref = Rc::new(RefCell::new(new_tree));
 
         self.route_storage
@@ -203,7 +208,7 @@ impl<S: TreeStorage<NM, CM>, NM: NodeManager, CM: ContactManager, P: Pathfinding
 
         let new_tree = self
             .pathfinding
-            .get_next(curr_time, source, bundle, excluded_nodes);
+            .get_next(curr_time, source, bundle, excluded_nodes, None);
         let tree = Rc::new(RefCell::new(new_tree));
         self.route_storage.borrow_mut().store(bundle, tree.clone());
 

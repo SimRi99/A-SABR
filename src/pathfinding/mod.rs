@@ -124,6 +124,7 @@ pub trait Pathfinding<NM: NodeManager, CM: ContactManager> {
         source: NodeID,
         bundle: &Bundle,
         excluded_nodes_sorted: &[NodeID],
+        file_path: Option<String>,
     ) -> PathFindingOutput<NM, CM>;
 
     /// Get a shared pointer to the multigraph.
@@ -167,6 +168,7 @@ pub fn try_make_hop<NM: NodeManager, CM: ContactManager, H: Heuristic<NM, CM>>(
         delay: 0.0,
         expiration: 0.0,
         arrival: Date::MAX,
+        distance: 0.0
     };
 
     // If bundle processing is enabled, a mutable bundle copy is required to be attached to the RouteStage.
@@ -243,15 +245,17 @@ pub fn try_make_hop<NM: NodeManager, CM: ContactManager, H: Heuristic<NM, CM>>(
             bundle_to_consider,
         );
 
+        route_proposition.cumulative_delay =
+            sndr_route_borrowed.cumulative_delay + final_data.delay;
+        route_proposition.hop_count = sndr_route_borrowed.hop_count + 1;
+        route_proposition.cumulative_distance = sndr_route_borrowed.cumulative_distance + final_data.distance;
         if let Some(heuristic) = &heuristic_option {
             let heuristic_result: HeuristicResult = heuristic.borrow_mut().compute_heuristics(&route_proposition, bundle, multigraph, visited);
             route_proposition.at_time_heuristic = heuristic_result.at_time_heuristic;
             route_proposition.hop_count_heuristic = heuristic_result.hop_count_heuristic;
+            route_proposition.cumulative_distance_heuristic = heuristic_result.cumultative_distance_heuristic;
         }
 
-        route_proposition.hop_count = sndr_route_borrowed.hop_count + 1;
-        route_proposition.cumulative_delay =
-            sndr_route_borrowed.cumulative_delay + final_data.delay;
         route_proposition.expiration = Date::min(
             final_data.expiration - sndr_route_borrowed.cumulative_delay,
             sndr_route_borrowed.expiration,

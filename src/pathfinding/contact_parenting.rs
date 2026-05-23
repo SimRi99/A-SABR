@@ -7,6 +7,8 @@ use std::{
 };
 use std::collections::HashSet;
 use std::time::Instant;
+use std::fs::OpenOptions;
+use std::io::Write;
 use crate::{
     bundle::Bundle,
     contact::Contact,
@@ -105,6 +107,7 @@ macro_rules! define_contact_graph {
                 source: NodeID,
                 bundle: &Bundle,
                 excluded_nodes_sorted: &[NodeID],
+                file_path: Option<String>
             ) -> PathFindingOutput<NM, CM> {
                 {
                     let mut graph = self.graph.borrow_mut();
@@ -152,6 +155,7 @@ macro_rules! define_contact_graph {
 
                 let start = Instant::now();
                 let mut i = 0;
+                let mut resulting_at_time: Date = Date::MIN;
                 while let Some(Reverse(DistanceWrapper(from_route, _))) = priority_queue.pop() {
                     if from_route.borrow().is_disabled {
                         continue;
@@ -161,6 +165,7 @@ macro_rules! define_contact_graph {
 
                     if !$is_tree_output {
                         if bundle.destinations[0] == tx_node_id {
+                            resulting_at_time = from_route.borrow().at_time;
                             break;
                         }
                     }
@@ -177,7 +182,7 @@ macro_rules! define_contact_graph {
                         let mut graph = self.graph.borrow_mut();
                         let sender = &mut graph.senders[tx_node_id as usize];
                         for receiver in &mut sender.receivers {
-                            receiver.lazy_prune_and_get_first_idx(from_route.borrow().at_time);
+                            receiver.lazy_prune_and_get_first_idx(current_time);
                         }
                     }
 
@@ -270,6 +275,13 @@ macro_rules! define_contact_graph {
                     }
                 }
                 let end = start.elapsed();
+                if let Some(filename) = file_path {
+                    let mut file = OpenOptions::new().append(true).create(true).open(filename).unwrap();
+                    let fileoutput = format!("{},{},{}", end.as_micros(), i, resulting_at_time);
+                    writeln!(file, "{}", fileoutput);
+                } else {
+                    println!("{:?}, {}", end.as_micros(), i);
+                }
 
                 // We replace rather than clear because some work areas became part of the output.
                 for contact in altered_contacts {

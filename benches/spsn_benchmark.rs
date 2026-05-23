@@ -75,13 +75,13 @@ pub fn benchmark(c: &mut Criterion) {
         group.bench_function(router_type, |b| {
             b.iter_batched(
                 || {
-                    let (nodes, contacts, distances) = TVGUtilContactPlan::parse::<
+                    let (nodes, contacts, distances, distances_per_time, min_distances) = TVGUtilContactPlan::parse::<
                         NoManagement,
                         SegmentationManager,
-                    >(ptvg_filepath)
+                    >(ptvg_filepath, 1.0)
                     .unwrap();
 
-                    build_generic_router(router_type, nodes, contacts, distances, Some(spsn_opts.clone()))
+                    build_generic_router(router_type, nodes, contacts, distances, distances_per_time, min_distances, Some(spsn_opts.clone()))
                 },
                 |mut router| {
                     black_box(router.route(
@@ -89,6 +89,7 @@ pub fn benchmark(c: &mut Criterion) {
                         black_box(&bundle),
                         black_box(curr_time),
                         black_box(&excluded_nodes),
+                        None
                     ));
                 },
                 BatchSize::SmallInput,

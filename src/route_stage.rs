@@ -3,7 +3,7 @@ use crate::contact::Contact;
 use crate::contact_manager::ContactManager;
 use crate::node::Node;
 use crate::node_manager::NodeManager;
-use crate::types::{Date, Duration, HopCount, NodeID};
+use crate::types::{Date, Duration, GeographicalDistance, HopCount, NodeID};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -53,6 +53,8 @@ pub struct RouteStage<NM: NodeManager, CM: ContactManager> {
     pub hop_count: HopCount,
     /// The cumulative delay incurred on the path to this stage, often used for routing optimizations.
     pub cumulative_delay: Duration,
+    /// The geographical distance that was traveled through so far
+    pub cumulative_distance: GeographicalDistance,
     /// The time at which this route stage expires, indicating when it is no longer valid.
     pub expiration: Date,
     /// A flag indicating whether the route has been fully initialized and is ready for routing.
@@ -65,6 +67,8 @@ pub struct RouteStage<NM: NodeManager, CM: ContactManager> {
     pub at_time_heuristic: Date,
     // The heuristic how many hops it will take to reach the target of the bundle
     pub hop_count_heuristic: HopCount,
+    /// The heuristic predicting about the required distance to pass to reach the bundle's destination
+    pub cumulative_distance_heuristic: GeographicalDistance,
 
     #[cfg(feature = "node_proc")]
     /// The stage of the bundle that arrives at to_node
@@ -96,13 +100,15 @@ impl<NM: NodeManager, CM: ContactManager> RouteStage<NM, CM> {
             via: via_hop,
             hop_count: 0,
             cumulative_delay: 0.0,
+            cumulative_distance: 0.0,
             expiration: Date::MAX,
             route_initialized: false,
             next_for_destination: HashMap::new(),
             at_time_heuristic: Date::MIN,
             hop_count_heuristic: 0,
             #[cfg(feature = "node_proc")]
-            bundle: bundle,
+            bundle,
+            cumulative_distance_heuristic: 0.0
         }
     }
 
@@ -117,10 +123,12 @@ impl<NM: NodeManager, CM: ContactManager> RouteStage<NM, CM> {
         route.is_disabled = self.is_disabled;
         route.via = self.via.clone();
         route.hop_count = self.hop_count;
+        route.cumulative_distance = self.cumulative_distance;
         route.cumulative_delay = self.cumulative_delay;
         route.expiration = self.expiration;
         route.at_time_heuristic = self.at_time_heuristic;
         route.hop_count_heuristic = self.hop_count_heuristic;
+        route.cumulative_distance_heuristic = self.cumulative_distance_heuristic;
 
         route
     }

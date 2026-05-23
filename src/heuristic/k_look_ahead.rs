@@ -7,7 +7,7 @@ use crate::heuristic::{Heuristic, HeuristicDelayResult, HeuristicResult};
 use crate::multigraph::Multigraph;
 use crate::node_manager::NodeManager;
 use crate::route_stage::RouteStage;
-use crate::types::{Date, HopCount, NodeID};
+use crate::types::{Date, GeographicalDistance, HopCount, NodeID};
 use crate::pathfinding::{try_make_hop};
 use crate::bundle::Bundle;
 
@@ -18,6 +18,7 @@ pub struct KLookAhead<NM: NodeManager, CM: ContactManager, H: Heuristic<NM, CM>>
     visited: HashSet<NodeID>,
     best_at_time: Date,
     best_hop_count: HopCount,
+    best_distance: GeographicalDistance,
     _phantom_nm: PhantomData<NM>,
     _phantom_cm: PhantomData<CM>,
 }
@@ -35,11 +36,13 @@ impl<NM: NodeManager, CM: ContactManager, H: Heuristic<NM, CM>> KLookAhead<NM, C
             let heuristic_result: HeuristicResult = self.final_heuristic.compute_heuristics(route_stage, bundle, multigraph, visited);
             self.check_for_best_date(heuristic_result.at_time_heuristic);
             self.check_for_best_hop_count(heuristic_result.hop_count_heuristic);
+            self.check_for_best_distance(heuristic_result.cumultative_distance_heuristic);
             return;
         }
         if route_stage.to_node == self.target {
             self.check_for_best_date(route_stage.at_time);
-            self.check_for_best_hop_count(route_stage.hop_count_heuristic);
+            self.check_for_best_hop_count(route_stage.hop_count);
+            self.check_for_best_distance(route_stage.cumulative_distance);
             return;
         }
 
@@ -92,6 +95,13 @@ impl<NM: NodeManager, CM: ContactManager, H: Heuristic<NM, CM>> KLookAhead<NM, C
         }
     }
 
+    // Check whether a newly found distance might be better than the previous one
+    fn check_for_best_distance(&mut self, new_distance: GeographicalDistance) {
+        if new_distance < self.best_distance {
+            self.best_distance = new_distance;
+        }
+    }
+
     // Check whether the current node was already visited
     fn contains_node(&self, node: NodeID) -> bool {
         self.visited.contains(&node)
@@ -110,7 +120,7 @@ impl<NM: NodeManager, CM: ContactManager, H: Heuristic<NM, CM>> KLookAhead<NM, C
 
 impl <NM: NodeManager +'static, CM: ContactManager +'static, H: Heuristic<NM, CM> > Heuristic<NM, CM> for KLookAhead<NM, CM, H> {
     fn new() -> Self {
-       KLookAhead {target: 0, k: 1, final_heuristic: H::new(), visited: HashSet::new(), best_at_time: Date::MAX, best_hop_count: HopCount::MAX, _phantom_cm: PhantomData, _phantom_nm: PhantomData}
+       KLookAhead {target: 0, k: 1, final_heuristic: H::new(), visited: HashSet::new(), best_at_time: Date::MAX, best_hop_count: HopCount::MAX, best_distance: GeographicalDistance::MAX, _phantom_cm: PhantomData, _phantom_nm: PhantomData}
     }
 
     fn compute_heuristics(&mut self, route_stage: &RouteStage<NM, CM>, bundle: &Bundle, multigraph: &Multigraph<NM, CM>, visited: &HashSet<NodeID>) -> HeuristicResult {
@@ -118,11 +128,12 @@ impl <NM: NodeManager +'static, CM: ContactManager +'static, H: Heuristic<NM, CM
         self.compute_for_k(self.k, route_stage, bundle, multigraph, visited);
 
         // Extract the result
-        let result: HeuristicResult = HeuristicResult{at_time_heuristic: self.best_at_time, hop_count_heuristic: self.best_hop_count};
+        let result: HeuristicResult = HeuristicResult{at_time_heuristic: self.best_at_time, hop_count_heuristic: self.best_hop_count, cumultative_distance_heuristic: self.best_distance};
 
         // Reset values for next computation
         self.best_at_time = Date::MAX;
         self.best_hop_count = HopCount::MAX;
+        self.best_distance = GeographicalDistance::MAX;
 
         result
     }

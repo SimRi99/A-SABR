@@ -8,9 +8,18 @@ use std::fs;
 use std::iter::FromIterator;
 
 pub fn benchmark(c: &mut Criterion) {
-    let ptvg_filepath = "benches/astar_graphs/test_ptvg.json";
+    let ptvg_filepath = "benches/astar_graphs/1week.json";
 
     let source = 0;
+    let bundle = Bundle {
+        source,
+        destinations: vec![2], // Fac_Ariel
+        priority: 0,
+        size: 0.0,
+        expiration: 24060000.0,
+    };
+    let distance_modifiers = [0.0, 0.1]; // 0.2, 0.4, 0.6, 0.8, 1.0];
+
     let curr_time = 60.0;
     let excluded_nodes: Vec<NodeID> = vec![];
     let spsn_opts = SpsnOptions {
@@ -19,49 +28,36 @@ pub fn benchmark(c: &mut Criterion) {
         max_entries: 10,
     };
 
-    let mut destinations = Vec::from_iter(21..=44);
-
     let mut router_types = vec![
        // ("VolCgrHybridParenting", "VolCgrHybrid"),
         //("VolCgrNodeParenting", "VolCgrNode"),
         #[cfg(feature = "contact_work_area")]
         //("VolCgrContactParenting", "VolCgrContact"),
-        //("VolCgrHybridParentingGeoDistance", "VolCgrHybridGeoDistance"),
-        //("VolCgrNodeParentingGeoDistance", "VolCgrNodeGeoDistance"),
+        ("VolCgrHybridParentingOwlt", "VolCgr*Hybrid"),
+        ("VolCgrNodeParentingOwlt", "VolCgr*Node"),
         #[cfg(feature = "contact_work_area")]
-        //("VolCgrContactParentingGeoDistance", "VolCgrContactGeoDistance"),
-        //("VolCgrHybridParentingHeuristicGeoDistance", "VolCgr*HybridMinGeoDistance"),
-        ("VolCgrNodeParentingHeuristicGeoDistance", "VolCgr*NodeMinGeoDistance"),
-        #[cfg(feature = "contact_work_area")]
-        ("VolCgrContactParentingHeuristicGeoDistance", "VolCgr*ContactMinGeoDistance"),
-        ("VolCgrHybridParentingHeuristicCurrentGeoDistance", "VolCgr*HybridCurrGeoDistance"),
-        ("VolCgrNodeParentingHeuristicCurrentGeoDistance", "VolCgr*NodeCurrGeoDistance"),
-        #[cfg(feature = "contact_work_area")]
-        ("VolCgrContactParentingHeuristicCurrentGeoDistance", "VolCgr*ContactCurrGeoDistance"),
+        ("VolCgrContactParentingOwlt", "VolCgr*Contact")
+    //    ("SpsnHybridParenting", "SpsnHybrid"),
+      //  ("SpsnNodeParenting", "SpsnNode"),
+      //  ("SpsnHybridParentingOwlt", "Spsn*Hybrid"),
+       // ("SpsnNodeParentingOwlt", "Spsn*Node")
     ];
 
     let mut group = c.benchmark_group("RouterDestinations");
 
     for (router_type, router_name) in router_types {
-        for destination in destinations.iter() {
-            let bundle = Bundle {
-                source,
-                destinations: vec![*destination],
-                priority: 0,
-                size: 0.0,
-                expiration: 24060000000000.0,
-            };
-            let experiment_name = router_name.to_owned() + &destination.to_string();
+        for modifier in distance_modifiers.iter() {
+            let experiment_name = router_name.to_owned() + &modifier.to_string();
             group.bench_function(&experiment_name, |b| {
                 b.iter_batched(
                     || {
                         let (nodes, contacts, distances, distances_per_time, min_distances) = TVGUtilContactPlan::parse::<
                             NoManagement,
                             SegmentationManager,
-                        >(ptvg_filepath, 1.0)
+                        >(ptvg_filepath, *modifier)
                             .unwrap();
 
-                        fs::create_dir(format!("benches/results_rr_distance_2/{}", &destination.to_string()));
+                        fs::create_dir(format!("benches/results_weak_h/{}", &modifier.to_string()));
                         build_generic_router(router_type, nodes, contacts, distances, distances_per_time, min_distances, Some(spsn_opts.clone()))
                     },
                     |mut router| {
@@ -70,7 +66,7 @@ pub fn benchmark(c: &mut Criterion) {
                             black_box(&bundle),
                             black_box(curr_time),
                             black_box(&excluded_nodes),
-                            Some(format!("benches/results_rr_distance_2/{}/{}.txt", &destination.to_string(), router_name))
+                            Some(format!("benches/results_weak_h/{}/{}.txt", &modifier.to_string(), router_name))
                         ));
                     },
                     BatchSize::SmallInput,

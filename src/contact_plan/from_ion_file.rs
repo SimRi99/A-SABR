@@ -101,6 +101,11 @@ impl FromIONContactData<NoManagement, SegmentationManager> for SegmentationManag
                 end: data.tx_end,
                 val: data.delay,
             }],
+            vec![Segment::<Duration> {
+                start: data.tx_start,
+                end: data.tx_end,
+                val: 0.0,
+            }]
         );
         Contact::try_new(contact_info, manager)
     }

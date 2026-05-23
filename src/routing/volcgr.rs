@@ -12,7 +12,8 @@ use crate::{
 };
 
 use std::{cell::RefCell, marker::PhantomData, rc::Rc};
-use crate::types::Duration;
+use std::collections::HashMap;
+use crate::types::{Duration, GeographicalDistance, OrderedDate};
 use super::{dry_run_unicast_path, schedule_unicast_path, Router, RoutingOutput};
 
 pub struct VolCgr<
@@ -40,13 +41,14 @@ impl<NM: NodeManager, CM: ContactManager, P: Pathfinding<NM, CM>, S: RouteStorag
         bundle: &Bundle,
         curr_time: Date,
         excluded_nodes: &[NodeID],
+        file_path: Option<String>
     ) -> Option<RoutingOutput<NM, CM>> {
         if bundle.expiration < curr_time {
             return None;
         }
 
         if bundle.destinations.len() == 1 {
-            return self.route_unicast(source, bundle, curr_time, excluded_nodes);
+            return self.route_unicast(source, bundle, curr_time, excluded_nodes, file_path);
         }
 
         todo!();
@@ -60,10 +62,12 @@ impl<S: RouteStorage<NM, CM>, NM: NodeManager, CM: ContactManager, P: Pathfindin
         nodes: Vec<Node<NM>>,
         contacts: Vec<Contact<NM, CM>>,
         distances: Vec<Vec<Duration>>,
+        distances_per_time: Vec<Vec<HashMap<OrderedDate, GeographicalDistance>>>,
+        min_distances: Vec<Vec<GeographicalDistance>>,
         route_storage: Rc<RefCell<S>>,
     ) -> Self {
         Self {
-            pathfinding: P::new(Rc::new(RefCell::new(Multigraph::new(nodes, contacts, distances)))),
+            pathfinding: P::new(Rc::new(RefCell::new(Multigraph::new(nodes, contacts, distances, distances_per_time, min_distances)))),
             route_storage: route_storage.clone(),
             // for compilation
             _phantom_nm: PhantomData,
@@ -77,6 +81,7 @@ impl<S: RouteStorage<NM, CM>, NM: NodeManager, CM: ContactManager, P: Pathfindin
         bundle: &Bundle,
         curr_time: Date,
         excluded_nodes: &[NodeID],
+        file_path: Option<String>
     ) -> Option<RoutingOutput<NM, CM>> {
         let dest = bundle.destinations[0];
 
@@ -97,7 +102,7 @@ impl<S: RouteStorage<NM, CM>, NM: NodeManager, CM: ContactManager, P: Pathfindin
 
         let new_tree = self
             .pathfinding
-            .get_next(curr_time, source, bundle, excluded_nodes);
+            .get_next(curr_time, source, bundle, excluded_nodes, file_path);
         let tree = Rc::new(RefCell::new(new_tree));
 
         if let Some(route) = Route::from_tree(tree, dest) {
